@@ -1,6 +1,5 @@
 @import "tailwindcss";
 
-/* Ensina o Tailwind v4 a usar as cores da Jordan Collection */
 @theme {
   --color-background: hsl(var(--background));
   --color-foreground: hsl(var(--foreground));
@@ -28,34 +27,39 @@
 
 @layer base {
   :root {
-    /* Paleta Premium Jordan Collection */
-    --background: 40 20% 98%;
-    --foreground: 24 15% 15%;
+    /* O Fundo agora é levemente bege clarinho (puxado do J do logo) */
+    --background: 30 20% 98%;
+    /* Texto escuro quase preto, mas com um toque muito sutil do vinho */
+    --foreground: 345 40% 12%;
     
     --card: 0 0% 100%;
-    --card-foreground: 24 15% 15%;
+    --card-foreground: 345 40% 12%;
     
     --popover: 0 0% 100%;
-    --popover-foreground: 24 15% 15%;
+    --popover-foreground: 345 40% 12%;
     
-    --primary: 344 67% 22%;
-    --primary-foreground: 0 0% 100%;
+    /* A COR OFICIAL: Vinho escuro/Bordeaux extraído do fundo do seu logo */
+    --primary: 345 60% 25%;
+    /* Texto em cima do botão vinho será o bege claro do logo */
+    --primary-foreground: 30 30% 90%;
     
-    --secondary: 35 44% 94%;
-    --secondary-foreground: 344 67% 22%;
+    /* Secundária: O bege do logo (usado em hover e fundos) */
+    --secondary: 30 30% 90%;
+    --secondary-foreground: 345 60% 25%;
     
-    --muted: 35 44% 94%;
-    --muted-foreground: 24 6% 43%;
+    --muted: 30 10% 90%;
+    --muted-foreground: 345 10% 45%;
     
-    --accent: 35 44% 94%;
-    --accent-foreground: 344 67% 22%;
+    /* O Rosa Neon/Vibrante que tem no seu cartão de visitas para detalhes de destaque */
+    --accent: 335 85% 55%;
+    --accent-foreground: 0 0% 100%;
     
     --destructive: 0 84% 60%;
     --destructive-foreground: 0 0% 100%;
     
-    --border: 30 11% 90%;
-    --input: 30 11% 90%;
-    --ring: 344 67% 22%;
+    --border: 30 15% 90%;
+    --input: 30 15% 90%;
+    --ring: 345 60% 25%;
     
     --radius: 0.75rem;
   }
@@ -67,21 +71,21 @@
   body {
     background-color: var(--color-background);
     color: var(--color-foreground);
+    font-family: ui-sans-serif, system-ui, -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, "Helvetica Neue", Arial, sans-serif;
   }
 }
 
-h1, h2, h3, h4, .font-serif {
-  font-family: var(--font-serif), serif;
+.font-serif {
+  font-family: "Playfair Display", ui-serif, Georgia, Cambria, "Times New Roman", Times, serif;
 }
 
-/* Customização fina de inputs e barras de rolagem */
 input, select, textarea {
-  transition: all 0.2s ease-in-out;
+  transition: all 0.3s cubic-bezier(0.4, 0, 0.2, 1);
 }
 
 input:focus, select:focus, textarea:focus {
   outline: none;
-  box-shadow: 0 0 0 1px var(--color-primary);
+  box-shadow: 0 0 0 3px hsla(345, 60%, 25%, 0.15); 
   border-color: var(--color-primary);
 }
 
@@ -93,9 +97,9 @@ input:focus, select:focus, textarea:focus {
   background: transparent;
 }
 ::-webkit-scrollbar-thumb {
-  background: hsl(30 11% 90%);
-  border-radius: 99px;
+  background: hsl(30 20% 85%); 
+  border-radius: 10px;
 }
 ::-webkit-scrollbar-thumb:hover {
-  background: hsl(35 44% 80%);
+  background: hsl(345 30% 70%);
 }
