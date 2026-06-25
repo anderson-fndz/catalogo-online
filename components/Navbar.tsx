@@ -14,21 +14,35 @@ export function Navbar() {
 
   useEffect(() => {
     async function carregarUsuario() {
+      // 1. Tenta ler primeiro do Cache Local (Instantâneo)
+      const cacheUser = sessionStorage.getItem("jc_user_meta");
+      if (cacheUser) {
+        setUsuario(JSON.parse(cacheUser));
+        return; // Mata a função aqui, sem carregar a internet
+      }
+
+      // 2. Se não tiver no cache (primeiro acesso), busca no Supabase
       const { data: { user } } = await supabase.auth.getUser();
       if (user) {
-        setUsuario({
+        const dadosUsuario = {
           nome: user.user_metadata?.nome_completo || "Administrador",
           loja: user.user_metadata?.nome_loja || "Ateliê",
           email: user.email || ""
-        });
+        };
+        
+        // Salva no cache para as próximas páginas lerem instantaneamente
+        sessionStorage.setItem("jc_user_meta", JSON.stringify(dadosUsuario));
+        setUsuario(dadosUsuario);
       }
     }
     carregarUsuario();
   }, []);
 
   const handleSair = async () => {
+    // Limpa o cache ao sair do sistema
+    sessionStorage.removeItem("jc_user_meta");
     await supabase.auth.signOut();
-    router.push("/login");
+    window.location.href = "/login";
   };
 
   return (
@@ -46,9 +60,7 @@ export function Navbar() {
              </span>
           </div>
 
-          {/* ==========================================
-              CENTRO: O COCKPIT DE NAVEGAÇÃO INTERNA
-             ========================================== */}
+          {/* CENTRO: O COCKPIT DE NAVEGAÇÃO INTERNA */}
           <div className="flex items-center bg-secondary/30 p-1 rounded-xl border border-border/40 overflow-x-auto hide-scrollbar">
             
             {/* 1. VISÃO GERAL (DASHBOARD) */}
@@ -114,7 +126,7 @@ export function Navbar() {
               </button>
             </div>
           ) : (
-            <div className="w-10"></div> /* Placeholder para alinhar o centro quando não houver usuário */
+            <div className="w-10"></div>
           )}
           
         </div>
