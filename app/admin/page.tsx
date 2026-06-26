@@ -272,7 +272,7 @@ export default function DashboardBI() {
                       <CartesianGrid strokeDasharray="3 3" vertical={false} stroke="var(--color-border)" />
                       <XAxis dataKey="data" axisLine={false} tickLine={false} tick={{ fontSize: 12, fill: 'var(--color-muted-foreground)', fontWeight: 600, fontFamily: 'sans-serif' }} dy={10} />
                       <YAxis axisLine={false} tickLine={false} tick={{ fontSize: 12, fill: 'var(--color-muted-foreground)', fontWeight: 600, fontFamily: 'sans-serif' }} tickFormatter={(val) => `R$ ${val}`} />
-                      <Tooltip cursor={{ fill: 'var(--color-secondary)' }} formatter={(value: number) => [`R$ ${value.toFixed(2).replace(".", ",")}`, 'Faturamento']} contentStyle={{ borderRadius: '12px', border: '1px solid var(--color-border)', backgroundColor: 'var(--color-card)', color: 'var(--color-foreground)', boxShadow: '0 10px 15px -3px rgb(0 0 0 / 0.1)', fontWeight: 'bold', fontFamily: 'sans-serif' }} />
+                      <Tooltip cursor={{ fill: 'var(--color-secondary)' }} formatter={(value: any) => [`R$ ${value.toFixed(2).replace(".", ",")}`, 'Faturamento']} contentStyle={{ borderRadius: '12px', border: '1px solid var(--color-border)', backgroundColor: 'var(--color-card)', color: 'var(--color-foreground)', boxShadow: '0 10px 15px -3px rgb(0 0 0 / 0.1)', fontWeight: 'bold', fontFamily: 'sans-serif' }} />
                       <Bar dataKey="valor" fill="var(--color-primary)" radius={[6, 6, 0, 0]} barSize={40} />
                     </BarChart>
                   </ResponsiveContainer>
