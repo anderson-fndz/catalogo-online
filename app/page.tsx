@@ -88,10 +88,6 @@ export default function VitrinePublica() {
   return (
     <div className="min-h-screen bg-background font-sans selection:bg-primary/10 selection:text-primary flex flex-col">
       
-      {/* ========================================== */}
-      {/* HEADER ESTILO KALIE MODAS                  */}
-      {/* ========================================== */}
-      
       {/* 1. TOPO: AVISO (Agora na cor da marca) */}
       <div className="bg-primary text-primary-foreground text-[10px] sm:text-xs font-bold uppercase tracking-widest py-2.5 text-center px-4 w-full shadow-sm">
         Atacado somente para lojistas e revendedores
