@@ -4,8 +4,22 @@ import { useState, useEffect } from "react";
 import { supabase } from "@/lib/supabase";
 import { Navbar } from "@/components/Navbar";
 import { useRouter } from "next/navigation";
-import { Plus, Image as ImageIcon, Loader2, CheckCircle, AlertCircle, RefreshCw, FolderPlus, ChevronLeft, ChevronRight, X, Edit3, Palette, Search, Trash2, Layers, Scissors } from "lucide-react";
+import { Plus, Image as ImageIcon, Loader2, CheckCircle, AlertCircle, RefreshCw, FolderPlus, ChevronLeft, ChevronRight, X, Edit3, Palette, Search, Trash2, Layers, Scissors, Eye, EyeOff, Ruler } from "lucide-react";
 import { Button } from "@/components/ui/button";
+
+// O "Cérebro" de ordenação lógica de moda
+const ORDEM_TAMANHOS = ["PP", "P", "M", "G", "GG", "XG", "EXG", "G1", "G2", "G3", "G4", "G5", "U", "ÚNICO"];
+
+const ordenarTamanhos = (a: string, b: string) => {
+  const indexA = ORDEM_TAMANHOS.indexOf(a.toUpperCase());
+  const indexB = ORDEM_TAMANHOS.indexOf(b.toUpperCase());
+  
+  if (indexA !== -1 && indexB !== -1) return indexA - indexB;
+  if (indexA !== -1) return -1;
+  if (indexB !== -1) return 1;
+  
+  return a.localeCompare(b, undefined, { numeric: true, sensitivity: "base" });
+};
 
 export default function AdminPage() {
   const router = useRouter();
@@ -16,6 +30,7 @@ export default function AdminPage() {
   const [listaCoresBanco, setListaCoresBanco] = useState<any[]>([]);
   const [listaTecidosBanco, setListaTecidosBanco] = useState<any[]>([]);
   const [listaModelagensBanco, setListaModelagensBanco] = useState<any[]>([]);
+  const [listaTamanhosBanco, setListaTamanhosBanco] = useState<any[]>([]);
   const [carregando, setCarregando] = useState(true);
   const [editandoId, setEditandoId] = useState<string | null>(null);
 
@@ -24,21 +39,29 @@ export default function AdminPage() {
   const [preco, setPreco] = useState("");
   const [descricao, setDescricao] = useState("");
   const [coresSelecionadas, setCoresSelecionadas] = useState<string[]>([]);
+  const [tamanhosSelecionados, setTamanhosSelecionados] = useState<string[]>([]);
   const [tecido, setTecido] = useState("");
   const [categoriaTamanho, setCategoriaTamanho] = useState("");
-  const [tamanhos, setTamanhos] = useState("P, M, G, GG");
   const [linkDrive, setLinkDrive] = useState("");
   const [qtdMinima, setQtdMinima] = useState("0");
   const [statusEstoque, setStatusEstoque] = useState("Em Estoque");
   const [emPromocao, setEmPromocao] = useState(false);
   const [fotosPreview, setFotosPreview] = useState<{file?: File, url: string}[]>([]);
   
-  // Estados para Injetar Novos Atributos na Base
+  // Estados para Injetar Novos Atributos na Base (Inline)
+  const [buscaCor, setBuscaCor] = useState("");
+  const [formCorAberto, setFormCorAberto] = useState(false);
   const [novaCorNome, setNovaCorNome] = useState("");
   const [novaCorHex, setNovaCorHex] = useState("#5C1226");
+
+  const [formTamanhoAberto, setFormTamanhoAberto] = useState(false);
+  const [novoTamanhoNome, setNovoTamanhoNome] = useState("");
+
+  const [formTecidoAberto, setFormTecidoAberto] = useState(false);
   const [novoTecidoNome, setNovoTecidoNome] = useState("");
+
+  const [formModelagemAberto, setFormModelagemAberto] = useState(false);
   const [novaModelagemNome, setNovaModelagemNome] = useState("");
-  const [buscaCor, setBuscaCor] = useState("");
 
   const [enviando, setEnviando] = useState(false);
   const [statusMensagem, setStatusMensagem] = useState<{ tipo: "sucesso" | "erro"; texto: string } | null>(null);
@@ -49,10 +72,8 @@ export default function AdminPage() {
 
   async function checarAutenticacao() {
     const { data: { session } } = await supabase.auth.getSession();
-    
-    if (!session) {
-      router.push("/login");
-    } else {
+    if (!session) router.push("/login");
+    else {
       await carregarDadosIniciais();
       setVerificandoAuth(false);
     }
@@ -60,7 +81,7 @@ export default function AdminPage() {
 
   async function carregarDadosIniciais() {
     setCarregando(true);
-    await Promise.all([buscarProdutos(), buscarCores(), buscarTecidos(), buscarModelagens()]);
+    await Promise.all([buscarProdutos(), buscarCores(), buscarTecidos(), buscarModelagens(), buscarTamanhos()]);
     setCarregando(false);
   }
 
@@ -90,39 +111,80 @@ export default function AdminPage() {
     }
   }
 
-  const handleCadastrarNovaCor = async (e: React.FormEvent) => {
-    e.preventDefault();
+  async function buscarTamanhos() {
+    const { data } = await supabase.from("tamanhos").select("*");
+    if (data) setListaTamanhosBanco(data);
+  }
+
+  const alternarVisibilidade = async (id: string, ativoAtual: boolean) => {
+    const novoStatus = ativoAtual === undefined ? false : !ativoAtual;
+    setProdutos(produtos.map(p => p.id === id ? { ...p, ativo: novoStatus } : p));
+    const { error } = await supabase.from("produtos").update({ ativo: novoStatus }).eq("id", id);
+    if (error) { alert("Erro ao alterar visibilidade."); buscarProdutos(); }
+  };
+
+  const handleExcluirProduto = async (id: string) => {
+    if (window.confirm("Atenção: Excluir este produto da base de forma permanente?")) {
+      const { error } = await supabase.from("produtos").delete().eq("id", id);
+      if (error) alert("Erro ao excluir."); else buscarProdutos();
+    }
+  };
+
+  // Funções de Cadastro Inline
+  const handleCadastrarNovaCor = async () => {
     if (!novaCorNome) return;
     const { error } = await supabase.from("cores").insert([{ nome: novaCorNome.trim(), hex: novaCorHex }]);
-    if (!error) { setNovaCorNome(""); buscarCores(); }
+    if (!error) { setNovaCorNome(""); setFormCorAberto(false); buscarCores(); }
   };
 
-  const handleCadastrarNovoTecido = async (e: React.FormEvent) => {
-    e.preventDefault();
+  const handleCadastrarNovoTamanho = async () => {
+    if (!novoTamanhoNome) return;
+    const { error } = await supabase.from("tamanhos").insert([{ nome: novoTamanhoNome.trim().toUpperCase() }]);
+    if (!error) { setNovoTamanhoNome(""); setFormTamanhoAberto(false); buscarTamanhos(); }
+  };
+
+  const handleCadastrarNovoTecido = async () => {
     if (!novoTecidoNome) return;
     const { error } = await supabase.from("tecidos").insert([{ nome: novoTecidoNome.trim() }]);
-    if (!error) { setNovoTecidoNome(""); buscarTecidos(); }
+    if (!error) { setNovoTecidoNome(""); setTecido(novoTecidoNome.trim()); setFormTecidoAberto(false); buscarTecidos(); }
   };
 
-  const handleCadastrarNovaModelagem = async (e: React.FormEvent) => {
-    e.preventDefault();
+  const handleCadastrarNovaModelagem = async () => {
     if (!novaModelagemNome) return;
     const { error } = await supabase.from("modelagens").insert([{ nome: novaModelagemNome.trim() }]);
-    if (!error) { setNovaModelagemNome(""); buscarModelagens(); }
+    if (!error) { setNovaModelagemNome(""); setCategoriaTamanho(novaModelagemNome.trim()); setFormModelagemAberto(false); buscarModelagens(); }
   };
 
+  // Funções de Exclusão Inline
   const handleExcluirCor = async (id: string) => {
-    if (window.confirm("Excluir esta cor da base?")) { await supabase.from("cores").delete().eq("id", id); buscarCores(); }
+    if (window.confirm("Excluir esta cor da sua base?")) { await supabase.from("cores").delete().eq("id", id); buscarCores(); }
   };
-  const handleExcluirTecido = async (id: string) => {
-    if (window.confirm("Excluir este tecido da base?")) { await supabase.from("tecidos").delete().eq("id", id); buscarTecidos(); }
+  const handleExcluirTamanho = async (id: string) => {
+    if (window.confirm("Excluir este tamanho da sua base?")) { await supabase.from("tamanhos").delete().eq("id", id); buscarTamanhos(); }
   };
-  const handleExcluirModelagem = async (id: string) => {
-    if (window.confirm("Excluir esta modelagem da base?")) { await supabase.from("modelagens").delete().eq("id", id); buscarModelagens(); }
+  const handleExcluirTecido = async () => {
+    const id = listaTecidosBanco.find(t => t.nome === tecido)?.id;
+    if (id && window.confirm(`Excluir o tecido '${tecido}' da base?`)) { 
+      await supabase.from("tecidos").delete().eq("id", id); 
+      setTecido(listaTecidosBanco[0]?.nome || "");
+      buscarTecidos(); 
+    }
+  };
+  const handleExcluirModelagem = async () => {
+    const id = listaModelagensBanco.find(m => m.nome === categoriaTamanho)?.id;
+    if (id && window.confirm(`Excluir a modelagem '${categoriaTamanho}' da base?`)) { 
+      await supabase.from("modelagens").delete().eq("id", id); 
+      setCategoriaTamanho(listaModelagensBanco[0]?.nome || "");
+      buscarModelagens(); 
+    }
   };
 
   const toggleCorSelecao = (nomeCor: string) => {
     setCoresSelecionadas(prev => prev.includes(nomeCor) ? prev.filter(c => c !== nomeCor) : [...prev, nomeCor]);
+  };
+
+  const toggleTamanhoSelecao = (nomeTamanho: string) => {
+    setTamanhosSelecionados(prev => prev.includes(nomeTamanho) ? prev.filter(t => t !== nomeTamanho) : [...prev, nomeTamanho]);
   };
 
   const handleSelecionarFotos = (e: React.ChangeEvent<HTMLInputElement>) => {
@@ -174,12 +236,12 @@ export default function AdminPage() {
         }
       }
 
-      const listaTamanhos = tamanhos.split(",").map(t => t.trim()).filter(Boolean);
       const dadosProduto = {
         nome, preco: parseFloat(preco), descricao, imagens: urlsImagens,
-        cores: coresSelecionadas, grade_tamanhos: listaTamanhos, link_drive: linkDrive || null,
+        cores: coresSelecionadas, grade_tamanhos: tamanhosSelecionados, link_drive: linkDrive || null,
         qtd_minima: parseInt(qtdMinima) || 0, status_estoque: statusEstoque,
-        tecido, categoria_tamanho: categoriaTamanho, em_promocao: emPromocao
+        tecido, categoria_tamanho: categoriaTamanho, em_promocao: emPromocao,
+        ativo: true
       };
 
       if (editandoId) {
@@ -204,7 +266,7 @@ export default function AdminPage() {
   const handleEntrarModoEdicao = (prod: any) => {
     setEditandoId(prod.id); setNome(prod.nome); setPreco(prod.preco.toString());
     setDescricao(prod.descricao || ""); setCoresSelecionadas(prod.cores || []);
-    setTamanhos(prod.grade_tamanhos?.join(", ") || "P, M, G, GG"); setLinkDrive(prod.link_drive || "");
+    setTamanhosSelecionados(prod.grade_tamanhos || []); setLinkDrive(prod.link_drive || "");
     setQtdMinima(prod.qtd_minima?.toString() || "0"); setStatusEstoque(prod.status_estoque || "Em Estoque");
     setTecido(prod.tecido || (listaTecidosBanco[0]?.nome || ""));
     setCategoriaTamanho(prod.categoria_tamanho || (listaModelagensBanco[0]?.nome || ""));
@@ -217,8 +279,11 @@ export default function AdminPage() {
 
   const handleCancelarEdicao = () => {
     setEditandoId(null); setNome(""); setPreco(""); setDescricao(""); setCoresSelecionadas([]);
-    setTamanhos("P, M, G, GG"); setLinkDrive(""); setQtdMinima("0"); setStatusEstoque("Em Estoque"); setFotosPreview([]);
+    setTamanhosSelecionados([]); setLinkDrive(""); setQtdMinima("0"); setStatusEstoque("Em Estoque"); setFotosPreview([]);
     setTecido(listaTecidosBanco[0]?.nome || ""); setCategoriaTamanho(listaModelagensBanco[0]?.nome || ""); setEmPromocao(false);
+    
+    // Fechar os formulários inline se estiverem abertos
+    setFormCorAberto(false); setFormTamanhoAberto(false); setFormTecidoAberto(false); setFormModelagemAberto(false);
   };
 
   if (verificandoAuth) {
@@ -231,9 +296,10 @@ export default function AdminPage() {
   }
 
   const coresFiltradas = listaCoresBanco.filter(c => c.nome.toLowerCase().includes(buscaCor.toLowerCase()));
+  const tamanhosOrdenados = [...listaTamanhosBanco].sort((a, b) => ordenarTamanhos(a.nome, b.nome));
 
   return (
-    <div className="min-h-screen pb-16 selection:bg-primary/10 selection:text-primary">
+    <div className="min-h-screen pb-16 selection:bg-primary/10 selection:text-primary overflow-x-hidden">
       <Navbar />
       
       <main className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 pt-10 space-y-10">
@@ -264,38 +330,40 @@ export default function AdminPage() {
           ))}
         </div>
 
-        {/* CONTEÚDO DIVIDIDO */}
-        <div className="grid grid-cols-1 lg:grid-cols-[1fr_340px] gap-8 items-start">
-          
-          {/* PAINEL DE CONTROLE / CONFIGURAÇÃO DE PRODUTO */}
-          <div className="bg-card border border-border/60 rounded-xl shadow-sm p-6 sm:p-8 space-y-6">
-            <h2 className="text-lg font-semibold text-foreground flex items-center gap-2 font-serif border-b border-border/50 pb-3">
-              <FolderPlus className="h-4 w-4 text-primary shrink-0" />
-              {editandoId ? "Ajustar Especificações do Modelo" : "Inserir Nova Criação no Catálogo"}
-            </h2>
+        {/* ========================================== */}
+        {/* FORMULÁRIO CENTRALIZADO (SEM PAINEL LATERAL) */}
+        {/* ========================================== */}
+        <div className="bg-card border border-border/60 rounded-xl shadow-sm p-6 sm:p-8 space-y-8 min-w-0 overflow-hidden max-w-5xl mx-auto">
+          <h2 className="text-lg font-semibold text-foreground flex items-center gap-2 font-serif border-b border-border/50 pb-3">
+            <FolderPlus className="h-4 w-4 text-primary shrink-0" />
+            {editandoId ? "Ajustar Especificações do Modelo" : "Inserir Nova Criação no Catálogo"}
+          </h2>
 
-            <form onSubmit={handleSalvarProduto} className="space-y-6">
-              
-              <div className="grid grid-cols-1 sm:grid-cols-3 gap-4">
-                <div className="flex flex-col gap-1.5">
-                  <label className="text-[11px] font-bold text-muted-foreground uppercase tracking-wider">Nome da Peça *</label>
-                  <input type="text" value={nome} onChange={e => setNome(e.target.value)} placeholder="Ex: Conjunto Suede Premium" className="border border-border/80 bg-[#faf8f5]/40 rounded-lg px-3 h-10 text-sm focus:outline-none" />
-                </div>
-                <div className="flex flex-col gap-1.5">
-                  <label className="text-[11px] font-bold text-muted-foreground uppercase tracking-wider">Preço de Venda (R$) *</label>
-                  <input type="number" step="0.01" value={preco} onChange={e => setPreco(e.target.value)} placeholder="0,00" className="border border-border/80 bg-[#faf8f5]/40 rounded-lg px-3 h-10 text-sm focus:outline-none" />
-                </div>
-                <div className="flex flex-col gap-1.5">
-                  <label className="text-[11px] font-bold text-muted-foreground uppercase tracking-wider">Acervo Fotográfico *</label>
-                  <div className="relative border border-border/80 bg-[#faf8f5]/60 rounded-lg h-10 flex items-center px-3 cursor-pointer hover:bg-secondary/40 transition-colors">
-                    <ImageIcon className="h-4 w-4 text-muted-foreground mr-2 shrink-0" />
-                    <span className="text-xs text-muted-foreground truncate font-medium">Puxar arquivos...</span>
-                    <input type="file" multiple accept="image/*" onChange={handleSelecionarFotos} className="absolute inset-0 w-full h-full opacity-0 cursor-pointer" />
-                  </div>
+          <form onSubmit={handleSalvarProduto} className="space-y-8 min-w-0">
+            
+            {/* LINHA 1: NOME, PREÇO E FOTOS */}
+            <div className="grid grid-cols-1 md:grid-cols-3 gap-6">
+              <div className="flex flex-col gap-1.5 md:col-span-1">
+                <label className="text-[11px] font-bold text-muted-foreground uppercase tracking-wider">Nome da Peça *</label>
+                <input type="text" value={nome} onChange={e => setNome(e.target.value)} placeholder="Ex: Conjunto Suede Premium" className="border border-border/80 bg-[#faf8f5]/40 rounded-lg px-3 h-10 text-sm focus:outline-none" />
+              </div>
+              <div className="flex flex-col gap-1.5">
+                <label className="text-[11px] font-bold text-muted-foreground uppercase tracking-wider">Preço de Venda (R$) *</label>
+                <input type="number" step="0.01" value={preco} onChange={e => setPreco(e.target.value)} placeholder="0,00" className="border border-border/80 bg-[#faf8f5]/40 rounded-lg px-3 h-10 text-sm focus:outline-none" />
+              </div>
+              <div className="flex flex-col gap-1.5">
+                <label className="text-[11px] font-bold text-muted-foreground uppercase tracking-wider">Acervo Fotográfico *</label>
+                <div className="relative border border-border/80 bg-[#faf8f5]/60 rounded-lg h-10 flex items-center px-3 cursor-pointer hover:bg-secondary/40 transition-colors">
+                  <ImageIcon className="h-4 w-4 text-muted-foreground mr-2 shrink-0" />
+                  <span className="text-xs text-muted-foreground truncate font-medium">Puxar arquivos...</span>
+                  <input type="file" multiple accept="image/*" onChange={handleSelecionarFotos} className="absolute inset-0 w-full h-full opacity-0 cursor-pointer" />
                 </div>
               </div>
+            </div>
 
-              {fotosPreview.length > 0 && (
+            {/* FOTOS SELECIONADAS */}
+            {fotosPreview.length > 0 && (
+              <div className="w-full min-w-0 overflow-hidden">
                 <div className="flex gap-3 overflow-x-auto py-3 px-3 bg-[#faf8f5]/80 border border-dashed border-border rounded-xl">
                   {fotosPreview.map((foto, index) => (
                     <div key={index} className="relative w-24 h-32 bg-muted rounded-lg border border-border/60 shrink-0 group shadow-sm overflow-hidden">
@@ -309,172 +377,206 @@ export default function AdminPage() {
                     </div>
                   ))}
                 </div>
-              )}
+              </div>
+            )}
 
-              <div className="flex flex-col gap-2">
-                <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-2 mb-1">
-                  <label className="text-[11px] font-bold text-muted-foreground uppercase tracking-wider">Cores Disponíveis para Venda *</label>
+            {/* LINHA 2: WIDGET DE CORES (INLINE CREATION) */}
+            <div className="bg-secondary/5 border border-border/50 rounded-xl p-4 space-y-3">
+              <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-3">
+                <div className="flex items-center gap-2">
+                  <Palette className="h-4 w-4 text-primary" />
+                  <label className="text-[11px] font-bold text-foreground uppercase tracking-wider">Paleta de Cores do Produto *</label>
+                </div>
+                <div className="flex items-center gap-2">
                   <div className="relative">
                     <Search className="absolute left-2.5 top-1/2 -translate-y-1/2 h-3.5 w-3.5 text-muted-foreground" />
-                    <input type="text" placeholder="Filtrar paleta..." value={buscaCor} onChange={e => setBuscaCor(e.target.value)} className="border border-border/80 rounded-lg pl-8 pr-3 h-8 text-xs bg-[#faf8f5]/40 focus:outline-none w-full sm:w-44" />
+                    <input type="text" placeholder="Filtrar..." value={buscaCor} onChange={e => setBuscaCor(e.target.value)} className="border border-border/80 rounded-lg pl-8 pr-3 h-8 text-xs bg-card focus:outline-none w-full sm:w-40 shadow-sm" />
                   </div>
+                  <Button type="button" variant="outline" size="sm" onClick={() => setFormCorAberto(!formCorAberto)} className="h-8 text-xs font-bold border-primary/20 text-primary hover:bg-primary/5">
+                    {formCorAberto ? "Cancelar" : "+ Nova Cor"}
+                  </Button>
                 </div>
-                <div className="flex gap-2 flex-wrap p-3 border border-border/60 rounded-xl bg-[#faf8f5]/30 max-h-40 overflow-y-auto">
-                  {coresFiltradas.map((c) => {
-                    const ativo = coresSelecionadas.includes(c.nome);
-                    return (
-                      <button type="button" key={c.id} onClick={() => toggleCorSelecao(c.nome)} className={`flex items-center gap-2 px-3 py-1.5 border rounded-full text-xs font-semibold transition-all ${ativo ? "border-primary bg-primary/5 text-primary ring-1 ring-primary" : "border-border/80 bg-card text-muted-foreground hover:border-muted-foreground"}`}>
+              </div>
+
+              {formCorAberto && (
+                <div className="flex items-center gap-2 p-3 bg-card border border-primary/20 rounded-lg animate-in fade-in slide-in-from-top-2">
+                  <input type="text" value={novaCorNome} onChange={e => setNovaCorNome(e.target.value)} placeholder="Ex: Rosa Nude" className="border border-border/80 rounded-lg px-3 h-8 text-xs flex-1 focus:outline-none" />
+                  <input type="color" value={novaCorHex} onChange={e => setNovaCorHex(e.target.value)} className="w-8 h-8 rounded-md border border-border cursor-pointer bg-transparent p-0" />
+                  <Button type="button" onClick={handleCadastrarNovaCor} size="sm" className="h-8 text-xs font-bold">Salvar Cor</Button>
+                </div>
+              )}
+
+              <div className="flex gap-2 flex-wrap p-3 border border-border/60 rounded-lg bg-card/50 max-h-40 overflow-y-auto">
+                {coresFiltradas.map((c) => {
+                  const ativo = coresSelecionadas.includes(c.nome);
+                  return (
+                    <div key={c.id} className="relative group">
+                      <button type="button" onClick={() => toggleCorSelecao(c.nome)} className={`flex items-center gap-2 px-3 py-1.5 border rounded-full text-xs font-semibold transition-all ${ativo ? "border-primary bg-primary/5 text-primary ring-1 ring-primary" : "border-border/80 bg-card text-muted-foreground hover:border-muted-foreground"}`}>
                         <div className="w-3 h-3 rounded-full border border-black/10 shadow-inner" style={{ backgroundColor: c.hex }} />
                         {c.nome}
                       </button>
-                    );
-                  })}
+                      <button type="button" onClick={() => handleExcluirCor(c.id)} title="Apagar do banco de dados" className="absolute -top-1.5 -right-1.5 hidden group-hover:flex items-center justify-center bg-destructive text-white rounded-full w-4 h-4 shadow-md hover:scale-110 transition-transform z-10">
+                        <X size={10} />
+                      </button>
+                    </div>
+                  );
+                })}
+              </div>
+            </div>
+
+            {/* LINHA 3: WIDGET DE TAMANHOS (INLINE CREATION) */}
+            <div className="bg-secondary/5 border border-border/50 rounded-xl p-4 space-y-3">
+              <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-3">
+                <div className="flex items-center gap-2">
+                  <Ruler className="h-4 w-4 text-primary" />
+                  <label className="text-[11px] font-bold text-foreground uppercase tracking-wider">Grade de Tamanhos da Peça *</label>
                 </div>
+                <Button type="button" variant="outline" size="sm" onClick={() => setFormTamanhoAberto(!formTamanhoAberto)} className="h-8 text-xs font-bold border-primary/20 text-primary hover:bg-primary/5">
+                  {formTamanhoAberto ? "Cancelar" : "+ Novo Tamanho"}
+                </Button>
               </div>
 
-              <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
-                <div className="flex flex-col gap-1.5">
-                  <label className="text-[11px] font-bold text-muted-foreground uppercase tracking-wider">Tecido Cadastrado *</label>
-                  <select value={tecido} onChange={e => setTecido(e.target.value)} className="border border-border/80 bg-[#faf8f5]/40 rounded-lg px-3 h-10 text-sm focus:outline-none cursor-pointer font-medium">
-                    {listaTecidosBanco.map(t => <option key={t.id} value={t.nome}>{t.nome}</option>)}
-                  </select>
+              {formTamanhoAberto && (
+                <div className="flex items-center gap-2 p-3 bg-card border border-primary/20 rounded-lg animate-in fade-in slide-in-from-top-2">
+                  <input type="text" value={novoTamanhoNome} onChange={e => setNovoTamanhoNome(e.target.value)} placeholder="Ex: G5, 48..." className="border border-border/80 rounded-lg px-3 h-8 text-xs flex-1 focus:outline-none uppercase" />
+                  <Button type="button" onClick={handleCadastrarNovoTamanho} size="sm" className="h-8 text-xs font-bold">Salvar Tamanho</Button>
                 </div>
-                <div className="flex flex-col gap-1.5">
-                  <label className="text-[11px] font-bold text-muted-foreground uppercase tracking-wider">Modelagem da Peça *</label>
-                  <select value={categoriaTamanho} onChange={e => setCategoriaTamanho(e.target.value)} className="border border-border/80 bg-[#faf8f5]/40 rounded-lg px-3 h-10 text-sm focus:outline-none cursor-pointer font-medium">
-                    {listaModelagensBanco.map(m => <option key={m.id} value={m.nome}>{m.nome}</option>)}
-                  </select>
-                </div>
-              </div>
+              )}
 
-              <div className="grid grid-cols-1 sm:grid-cols-4 gap-4">
-                <div className="flex flex-col gap-1.5">
-                  <label className="text-[11px] font-bold text-muted-foreground uppercase tracking-wider">Grade Vetorial</label>
-                  <input type="text" value={tamanhos} onChange={e => setTamanhos(e.target.value)} className="border border-border/80 bg-[#faf8f5]/40 rounded-lg px-3 h-10 text-sm focus:outline-none" />
+              <div className="flex gap-2 flex-wrap p-3 border border-border/60 rounded-lg bg-card/50 max-h-40 overflow-y-auto">
+                {tamanhosOrdenados.map((t) => {
+                  const ativo = tamanhosSelecionados.includes(t.nome);
+                  return (
+                    <div key={t.id} className="relative group">
+                      <button type="button" onClick={() => toggleTamanhoSelecao(t.nome)} className={`px-4 py-1.5 border rounded-lg text-xs font-bold transition-all min-w-[3rem] ${ativo ? "border-primary bg-primary text-primary-foreground shadow-sm" : "border-border/80 bg-card text-muted-foreground hover:border-muted-foreground"}`}>
+                        {t.nome}
+                      </button>
+                      <button type="button" onClick={() => handleExcluirTamanho(t.id)} title="Apagar do banco de dados" className="absolute -top-1.5 -right-1.5 hidden group-hover:flex items-center justify-center bg-destructive text-white rounded-full w-4 h-4 shadow-md hover:scale-110 transition-transform z-10">
+                        <X size={10} />
+                      </button>
+                    </div>
+                  );
+                })}
+                {tamanhosOrdenados.length === 0 && <span className="text-xs text-muted-foreground italic">Nenhum tamanho cadastrado. Crie um novo.</span>}
+              </div>
+            </div>
+
+            {/* LINHA 4: TECIDO E MODELAGEM (INLINE CREATION) */}
+            <div className="grid grid-cols-1 sm:grid-cols-2 gap-6">
+              
+              {/* Box Tecido */}
+              <div className="flex flex-col gap-2 p-4 border border-border/60 rounded-xl bg-secondary/5">
+                <div className="flex items-center justify-between">
+                  <label className="text-[11px] font-bold text-muted-foreground uppercase tracking-wider flex items-center gap-1.5"><Scissors className="w-3.5 h-3.5"/> Tecido *</label>
+                  <button type="button" onClick={() => setFormTecidoAberto(!formTecidoAberto)} className="text-[10px] font-bold text-primary hover:underline uppercase tracking-wider">
+                    {formTecidoAberto ? "Cancelar" : "+ Novo"}
+                  </button>
                 </div>
-                <div className="flex flex-col gap-1.5">
-                  <label className="text-[11px] font-bold text-muted-foreground uppercase tracking-wider">Mínimo / Lote</label>
-                  <input type="number" value={qtdMinima} onChange={e => setQtdMinima(e.target.value)} className="border border-border/80 bg-[#faf8f5]/40 rounded-lg px-3 h-10 text-sm focus:outline-none" />
-                </div>
-                <div className="flex flex-col gap-1.5">
-                  <label className="text-[11px] font-bold text-muted-foreground uppercase tracking-wider">Disponibilidade</label>
-                  <select value={statusEstoque} onChange={e => setStatusEstoque(e.target.value)} className="border border-border/80 bg-[#faf8f5]/40 rounded-lg px-3 h-10 text-sm focus:outline-none cursor-pointer font-bold text-foreground">
-                    <option value="Em Estoque">🟢 Disponível</option>
-                    <option value="Poucas Unidades">🟡 Lote Crítico</option>
-                    <option value="Esgotado">🔴 Esgotado</option>
-                  </select>
-                </div>
-                {editandoId && (
-                  <div className="flex flex-col gap-1.5">
-                    <label className="text-[11px] font-bold text-emerald-600 uppercase tracking-wider">Ação Comercial</label>
-                    <select value={emPromocao ? "sim" : "nao"} onChange={e => setEmPromocao(e.target.value === "sim")} className={`border rounded-lg px-3 h-10 text-sm focus:outline-none cursor-pointer font-bold ${emPromocao ? "border-emerald-200 bg-emerald-50/50 text-emerald-700" : "border-border/80 bg-card text-muted-foreground"}`}>
-                      <option value="nao">Preço Padrão</option>
-                      <option value="sim">🔥 Em Promoção</option>
+                
+                {formTecidoAberto ? (
+                  <div className="flex gap-2 animate-in fade-in">
+                    <input type="text" value={novoTecidoNome} onChange={e => setNovoTecidoNome(e.target.value)} placeholder="Ex: Lã Batida" className="border border-border/80 rounded-lg px-3 h-10 text-sm flex-1 focus:outline-none" />
+                    <Button type="button" onClick={handleCadastrarNovoTecido} className="h-10 px-3 text-xs">Salvar</Button>
+                  </div>
+                ) : (
+                  <div className="flex gap-2">
+                    <select value={tecido} onChange={e => setTecido(e.target.value)} className="border border-border/80 bg-card rounded-lg px-3 h-10 text-sm focus:outline-none cursor-pointer font-medium flex-1">
+                      {listaTecidosBanco.map(t => <option key={t.id} value={t.nome}>{t.nome}</option>)}
                     </select>
+                    <Button type="button" variant="outline" onClick={handleExcluirTecido} title="Excluir tecido selecionado" className="h-10 w-10 p-0 border-destructive/20 hover:bg-destructive/10 text-destructive">
+                      <Trash2 className="h-4 w-4" />
+                    </Button>
                   </div>
                 )}
               </div>
 
+              {/* Box Modelagem */}
+              <div className="flex flex-col gap-2 p-4 border border-border/60 rounded-xl bg-secondary/5">
+                <div className="flex items-center justify-between">
+                  <label className="text-[11px] font-bold text-muted-foreground uppercase tracking-wider flex items-center gap-1.5"><Layers className="w-3.5 h-3.5"/> Modelagem *</label>
+                  <button type="button" onClick={() => setFormModelagemAberto(!formModelagemAberto)} className="text-[10px] font-bold text-primary hover:underline uppercase tracking-wider">
+                    {formModelagemAberto ? "Cancelar" : "+ Nova"}
+                  </button>
+                </div>
+                
+                {formModelagemAberto ? (
+                  <div className="flex gap-2 animate-in fade-in">
+                    <input type="text" value={novaModelagemNome} onChange={e => setNovaModelagemNome(e.target.value)} placeholder="Ex: Oversized" className="border border-border/80 rounded-lg px-3 h-10 text-sm flex-1 focus:outline-none" />
+                    <Button type="button" onClick={handleCadastrarNovaModelagem} className="h-10 px-3 text-xs">Salvar</Button>
+                  </div>
+                ) : (
+                  <div className="flex gap-2">
+                    <select value={categoriaTamanho} onChange={e => setCategoriaTamanho(e.target.value)} className="border border-border/80 bg-card rounded-lg px-3 h-10 text-sm focus:outline-none cursor-pointer font-medium flex-1">
+                      {listaModelagensBanco.map(m => <option key={m.id} value={m.nome}>{m.nome}</option>)}
+                    </select>
+                    <Button type="button" variant="outline" onClick={handleExcluirModelagem} title="Excluir modelagem selecionada" className="h-10 w-10 p-0 border-destructive/20 hover:bg-destructive/10 text-destructive">
+                      <Trash2 className="h-4 w-4" />
+                    </Button>
+                  </div>
+                )}
+              </div>
+            </div>
+
+            {/* LINHA 5: INFOS EXTRAS */}
+            <div className="grid grid-cols-1 sm:grid-cols-3 gap-6">
               <div className="flex flex-col gap-1.5">
-                <label className="text-[11px] font-bold text-muted-foreground uppercase tracking-wider">Link da Pasta de Fotos</label>
+                <label className="text-[11px] font-bold text-muted-foreground uppercase tracking-wider">Mínimo / Lote</label>
+                <input type="number" value={qtdMinima} onChange={e => setQtdMinima(e.target.value)} className="border border-border/80 bg-[#faf8f5]/40 rounded-lg px-3 h-10 text-sm focus:outline-none" />
+              </div>
+              <div className="flex flex-col gap-1.5">
+                <label className="text-[11px] font-bold text-muted-foreground uppercase tracking-wider">Disponibilidade</label>
+                <select value={statusEstoque} onChange={e => setStatusEstoque(e.target.value)} className="border border-border/80 bg-[#faf8f5]/40 rounded-lg px-3 h-10 text-sm focus:outline-none cursor-pointer font-bold text-foreground">
+                  <option value="Em Estoque">🟢 Disponível</option>
+                  <option value="Poucas Unidades">🟡 Lote Crítico</option>
+                  <option value="Esgotado">🔴 Esgotado</option>
+                </select>
+              </div>
+              {editandoId && (
+                <div className="flex flex-col gap-1.5">
+                  <label className="text-[11px] font-bold text-emerald-600 uppercase tracking-wider">Ação Comercial</label>
+                  <select value={emPromocao ? "sim" : "nao"} onChange={e => setEmPromocao(e.target.value === "sim")} className={`border rounded-lg px-3 h-10 text-sm focus:outline-none cursor-pointer font-bold ${emPromocao ? "border-emerald-200 bg-emerald-50/50 text-emerald-700" : "border-border/80 bg-card text-muted-foreground"}`}>
+                    <option value="nao">Preço Padrão</option>
+                    <option value="sim">🔥 Em Promoção</option>
+                  </select>
+                </div>
+              )}
+            </div>
+
+            <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
+              <div className="flex flex-col gap-1.5">
+                <label className="text-[11px] font-bold text-muted-foreground uppercase tracking-wider">Link da Pasta de Fotos (Drive)</label>
                 <input type="url" value={linkDrive} onChange={e => setLinkDrive(e.target.value)} placeholder="https://drive.google.com/..." className="border border-border/80 bg-[#faf8f5]/40 rounded-lg px-3 h-10 text-sm focus:outline-none" />
               </div>
               <div className="flex flex-col gap-1.5">
                 <label className="text-[11px] font-bold text-muted-foreground uppercase tracking-wider">Memorial Descritivo</label>
-                <textarea rows={2} value={descricao} onChange={e => setDescricao(e.target.value)} placeholder="Especificações sobre aviamento, caimento..." className="border border-border/80 bg-[#faf8f5]/40 rounded-lg p-3 text-sm focus:outline-none resize-none" />
-              </div>
-
-              <div className="flex items-center justify-between pt-2 border-t border-border/50 mt-4">
-                <div className="flex-1 mr-4">
-                  {statusMensagem && (
-                    <div className={`flex items-center gap-2 p-2 rounded-lg text-xs font-semibold ${statusMensagem.tipo === "sucesso" ? "bg-emerald-50 text-emerald-800 border border-emerald-100" : "bg-destructive/5 text-destructive border border-destructive/10"}`}>
-                      {statusMensagem.tipo === "sucesso" ? <CheckCircle className="h-3.5 w-3.5" /> : <AlertCircle className="h-3.5 w-3.5" />}
-                      <span>{statusMensagem.texto}</span>
-                    </div>
-                  )}
-                </div>
-                <Button type="submit" disabled={enviando} className="min-w-[180px] h-10 font-bold bg-primary text-primary-foreground hover:bg-primary/95 shadow-sm rounded-lg text-xs tracking-wider uppercase">
-                  {enviando ? <><Loader2 className="mr-2 h-3.5 w-3.5 animate-spin" /> Sincronizando...</> : editandoId ? <><RefreshCw className="mr-2 h-3.5 w-3.5" /> Atualizar Linha</> : <><Plus className="mr-2 h-3.5 w-3.5" /> Registrar Modelo</>}
-                </Button>
-              </div>
-            </form>
-          </div>
-
-          {/* PAINEL LATERAL ESPECÍFICO */}
-          <div className="space-y-6 lg:sticky lg:top-24 max-h-[85vh] overflow-y-auto pr-1">
-            
-            <div className="bg-card border border-border/60 rounded-xl shadow-sm p-5 space-y-4">
-              <h3 className="text-xs font-bold uppercase tracking-widest text-muted-foreground flex items-center gap-1.5 border-b border-border/50 pb-2 font-serif">
-                <Palette className="h-3.5 w-3.5 text-primary shrink-0" /> Paleta Base
-              </h3>
-              <form onSubmit={handleCadastrarNovaCor} className="space-y-3">
-                <input type="text" value={novaCorNome} onChange={e => setNovaCorNome(e.target.value)} placeholder="Nome do Tom" className="border border-border/80 rounded-lg px-2.5 h-8 text-xs w-full bg-[#faf8f5]/40 focus:none" />
-                <div className="flex gap-2 items-center justify-between">
-                  <div className="flex gap-2 items-center">
-                    <input type="color" value={novaCorHex} onChange={e => setNovaCorHex(e.target.value)} className="w-6 h-6 rounded-full border border-border cursor-pointer bg-transparent p-0 overflow-hidden" />
-                    <span className="text-[10px] font-mono text-muted-foreground">{novaCorHex.toUpperCase()}</span>
-                  </div>
-                  <button type="submit" className="px-3 h-7 text-[10px] font-bold uppercase tracking-wider bg-secondary text-primary border border-primary/20 rounded-md hover:bg-primary/5">Adicionar</button>
-                </div>
-              </form>
-              <div className="flex flex-col gap-1 max-h-24 overflow-y-auto border-t border-border/40 pt-2">
-                {listaCoresBanco.map(c => (
-                  <div key={c.id} className="flex items-center justify-between text-xs py-1 group">
-                    <div className="flex items-center gap-2">
-                      <div className="w-2.5 h-2.5 rounded-full border border-black/10 shadow-sm" style={{ backgroundColor: c.hex }} />
-                      <span className="font-medium text-foreground/80">{c.nome}</span>
-                    </div>
-                    <button onClick={() => handleExcluirCor(c.id)} className="text-muted-foreground hover:text-destructive opacity-0 group-hover:opacity-100 transition-opacity"><Trash2 className="h-3 w-3" /></button>
-                  </div>
-                ))}
+                <textarea rows={1} value={descricao} onChange={e => setDescricao(e.target.value)} placeholder="Especificações sobre aviamento, caimento..." className="border border-border/80 bg-[#faf8f5]/40 rounded-lg px-3 py-2 h-10 text-sm focus:outline-none resize-none" />
               </div>
             </div>
 
-            <div className="bg-card border border-border/60 rounded-xl shadow-sm p-5 space-y-4">
-              <h3 className="text-xs font-bold uppercase tracking-widest text-muted-foreground flex items-center gap-1.5 border-b border-border/50 pb-2 font-serif">
-                <Scissors className="h-3.5 w-3.5 text-primary shrink-0" /> Tecidos
-              </h3>
-              <form onSubmit={handleCadastrarNovoTecido} className="flex gap-2">
-                <input type="text" value={novoTecidoNome} onChange={e => setNovoTecidoNome(e.target.value)} placeholder="Ex: Lã Batida" className="border border-border/80 rounded-lg px-2.5 h-8 text-xs flex-1 bg-[#faf8f5]/40 focus:none" />
-                <button type="submit" className="px-3 h-8 text-[10px] font-bold uppercase tracking-wider bg-secondary text-primary border border-primary/20 rounded-md hover:bg-primary/5">Injetar</button>
-              </form>
-              <div className="flex flex-col gap-1 max-h-24 overflow-y-auto border-t border-border/40 pt-2">
-                {listaTecidosBanco.map(t => (
-                  <div key={t.id} className="flex items-center justify-between text-xs py-1 group">
-                    <span className="font-medium text-foreground/80">{t.nome}</span>
-                    <button onClick={() => handleExcluirTecido(t.id)} className="text-muted-foreground hover:text-destructive opacity-0 group-hover:opacity-100 transition-opacity"><Trash2 className="h-3 w-3" /></button>
+            <div className="flex items-center justify-between pt-6 border-t border-border/50">
+              <div className="flex-1 mr-4">
+                {statusMensagem && (
+                  <div className={`flex items-center gap-2 p-3 rounded-lg text-xs font-semibold ${statusMensagem.tipo === "sucesso" ? "bg-emerald-50 text-emerald-800 border border-emerald-100" : "bg-destructive/5 text-destructive border border-destructive/10"}`}>
+                    {statusMensagem.tipo === "sucesso" ? <CheckCircle className="h-4 w-4" /> : <AlertCircle className="h-4 w-4" />}
+                    <span>{statusMensagem.texto}</span>
                   </div>
-                ))}
+                )}
               </div>
+              <Button type="submit" disabled={enviando} className="min-w-[200px] h-12 font-bold bg-primary text-primary-foreground hover:bg-primary/95 shadow-md rounded-xl text-xs tracking-wider uppercase transition-transform hover:scale-[1.02]">
+                {enviando ? <><Loader2 className="mr-2 h-4 w-4 animate-spin" /> Processando...</> : editandoId ? <><RefreshCw className="mr-2 h-4 w-4" /> Atualizar Modelo</> : <><Plus className="mr-2 h-4 w-4" /> Registrar Modelo</>}
+              </Button>
             </div>
-
-            <div className="bg-card border border-border/60 rounded-xl shadow-sm p-5 space-y-4">
-              <h3 className="text-xs font-bold uppercase tracking-widest text-muted-foreground flex items-center gap-1.5 border-b border-border/50 pb-2 font-serif">
-                <Layers className="h-3.5 w-3.5 text-primary shrink-0" /> Modelagens
-              </h3>
-              <form onSubmit={handleCadastrarNovaModelagem} className="flex gap-2">
-                <input type="text" value={novaModelagemNome} onChange={e => setNovaModelagemNome(e.target.value)} placeholder="Ex: Oversized" className="border border-border/80 rounded-lg px-2.5 h-8 text-xs flex-1 bg-[#faf8f5]/40 focus:none" />
-                <button type="submit" className="px-3 h-8 text-[10px] font-bold uppercase tracking-wider bg-secondary text-primary border border-primary/20 rounded-md hover:bg-primary/5">Injetar</button>
-              </form>
-              <div className="flex flex-col gap-1 max-h-24 overflow-y-auto border-t border-border/40 pt-2">
-                {listaModelagensBanco.map(m => (
-                  <div key={m.id} className="flex items-center justify-between text-xs py-1 group">
-                    <span className="font-medium text-foreground/80">{m.nome}</span>
-                    <button onClick={() => handleExcluirModelagem(m.id)} className="text-muted-foreground hover:text-destructive opacity-0 group-hover:opacity-100 transition-opacity"><Trash2 className="h-3 w-3" /></button>
-                  </div>
-                ))}
-              </div>
-            </div>
-
-          </div>
+          </form>
         </div>
 
-        {/* LISTA DE PRODUTOS */}
-        <div className="bg-card border border-border/60 rounded-xl shadow-sm overflow-hidden">
+        {/* ========================================== */}
+        {/* LISTA DE PRODUTOS COM A NOVA COLUNA        */}
+        {/* ========================================== */}
+        <div className="bg-card border border-border/60 rounded-xl shadow-sm overflow-hidden min-w-0">
           <div className="p-5 sm:p-6 border-b border-border/50 flex justify-between items-center bg-secondary/20">
             <div>
               <h2 className="text-lg font-semibold text-foreground font-serif">Linhas Ativas no Catálogo</h2>
-              <p className="text-xs text-muted-foreground mt-0.5">Use o botão Editar para reordenar mídias ou reajustar precificação.</p>
+              <p className="text-xs text-muted-foreground mt-0.5">Use os ícones de olho para ocultar/mostrar o produto na vitrine pública.</p>
             </div>
             <button onClick={buscarProdutos} className="p-2 border border-border/80 rounded-lg bg-card hover:bg-secondary text-muted-foreground transition-all"><RefreshCw className="h-4 w-4" /></button>
           </div>
@@ -485,36 +587,85 @@ export default function AdminPage() {
                 <tr className="border-b border-border/50 bg-secondary/10 text-[11px] font-bold text-muted-foreground uppercase tracking-widest">
                   <th className="p-4 w-20">Modelo</th>
                   <th className="p-4">Especificação Técnica</th>
-                  <th className="p-4">Matéria / Corte</th>
-                  <th className="p-4 text-center w-28">Ações</th>
+                  <th className="p-4 w-48">Matéria / Corte</th>
+                  <th className="p-4 w-48">Grades / Tamanhos</th>
+                  <th className="p-4 text-center w-36">Ações</th>
                 </tr>
               </thead>
               <tbody className="divide-y divide-border/50 text-sm">
-                {produtos.map((prod) => (
-                  <tr key={prod.id} className="hover:bg-secondary/5 transition-colors">
-                    <td className="p-4">
-                      <div className="w-12 h-16 bg-muted rounded-lg border border-border/60 overflow-hidden shadow-sm">
-                        <img src={prod.imagens?.[0]} alt="" className="w-full h-full object-cover" />
-                      </div>
-                    </td>
-                    <td className="p-4">
-                      <div className="font-bold text-foreground tracking-tight">{prod.nome}</div>
-                      <div className="text-xs text-primary font-bold mt-1">R$ {Number(prod.preco).toFixed(2).replace(".", ",")}</div>
-                    </td>
-                    <td className="p-4 text-muted-foreground">
-                      <div className="font-semibold text-foreground/90">{prod.tecido || "Não especificado"}</div>
-                      <div className="text-xs mt-0.5 flex gap-2 items-center">
-                        <span>{prod.categoria_tamanho || "Comum"}</span>
-                        {prod.em_promocao && <span className="text-[9px] bg-emerald-50 text-emerald-700 border border-emerald-200 px-1.5 py-0.2 rounded font-bold uppercase tracking-wider">Liquidação</span>}
-                      </div>
-                    </td>
-                    <td className="p-4 text-center">
-                      <Button onClick={() => handleEntrarModoEdicao(prod)} variant="outline" size="sm" className="h-8 text-xs border-border/80 hover:bg-secondary/40 font-bold text-foreground rounded-lg">
-                        <Edit3 className="h-3.5 w-3.5 mr-1" /> Ajustar
-                      </Button>
-                    </td>
-                  </tr>
-                ))}
+                {produtos.map((prod) => {
+                  const isAtivo = prod.ativo === undefined ? true : prod.ativo;
+                  
+                  return (
+                    <tr key={prod.id} className={`transition-colors ${isAtivo ? "hover:bg-secondary/5" : "bg-muted/30 opacity-70"}`}>
+                      <td className="p-4">
+                        <div className="relative w-12 h-16 bg-muted rounded-lg border border-border/60 overflow-hidden shadow-sm">
+                          <img src={prod.imagens?.[0]} alt="" className={`w-full h-full object-cover ${!isAtivo && "grayscale"}`} />
+                          {!isAtivo && (
+                            <div className="absolute inset-0 bg-black/40 flex items-center justify-center">
+                              <EyeOff className="text-white h-4 w-4" />
+                            </div>
+                          )}
+                        </div>
+                      </td>
+                      <td className="p-4">
+                        <div className="flex items-center gap-2">
+                          <div className={`font-bold tracking-tight ${isAtivo ? "text-foreground" : "text-muted-foreground"}`}>{prod.nome}</div>
+                          {!isAtivo && <span className="text-[9px] font-bold uppercase tracking-wider bg-muted-foreground/20 text-muted-foreground px-1.5 py-0.5 rounded">Oculto</span>}
+                        </div>
+                        <div className={`text-xs font-bold mt-1 ${isAtivo ? "text-primary" : "text-muted-foreground"}`}>R$ {Number(prod.preco).toFixed(2).replace(".", ",")}</div>
+                      </td>
+                      
+                      {/* COLUNA ANTIGA: APENAS TECIDO E MODELAGEM */}
+                      <td className={`p-4 ${isAtivo ? "text-muted-foreground" : "text-muted-foreground/60"}`}>
+                        <div className="font-semibold">{prod.tecido || "Não especificado"}</div>
+                        <div className="text-xs mt-0.5 flex gap-2 items-center mb-1.5">
+                          <span>{prod.categoria_tamanho || "Comum"}</span>
+                          {prod.em_promocao && <span className="text-[9px] bg-emerald-50 text-emerald-700 border border-emerald-200 px-1.5 py-0.2 rounded font-bold uppercase tracking-wider">Liquidação</span>}
+                        </div>
+                      </td>
+
+                      {/* NOVA COLUNA: APENAS TAMANHOS */}
+                      <td className="p-4">
+                        {prod.grade_tamanhos && prod.grade_tamanhos.length > 0 ? (
+                          <div className="flex flex-wrap gap-1 mt-1">
+                            {[...prod.grade_tamanhos].sort(ordenarTamanhos).map(t => (
+                              <span key={t} className="text-[9px] bg-secondary/50 text-muted-foreground border border-border/80 px-1.5 py-0.5 rounded font-bold uppercase tracking-widest">{t}</span>
+                            ))}
+                          </div>
+                        ) : (
+                          <span className="text-[9px] italic text-muted-foreground/50">Sem tamanhos</span>
+                        )}
+                      </td>
+
+                      <td className="p-4">
+                        <div className="flex items-center justify-center gap-2">
+                          <button 
+                            title={isAtivo ? "Ocultar na vitrine" : "Mostrar na vitrine"}
+                            onClick={() => alternarVisibilidade(prod.id, prod.ativo)} 
+                            className={`p-2 rounded-lg transition-colors border ${isAtivo ? "border-border/80 text-muted-foreground hover:bg-secondary/40 hover:text-foreground" : "border-primary/30 bg-primary/5 text-primary hover:bg-primary/10"}`}
+                          >
+                            {isAtivo ? <Eye className="h-4 w-4" /> : <EyeOff className="h-4 w-4" />}
+                          </button>
+                          <button 
+                            title="Editar produto"
+                            onClick={() => handleEntrarModoEdicao(prod)} 
+                            className="p-2 border border-border/80 text-muted-foreground hover:bg-secondary/40 hover:text-foreground rounded-lg transition-colors"
+                          >
+                            <Edit3 className="h-4 w-4" />
+                          </button>
+                          <button 
+                            title="Excluir permanentemente"
+                            onClick={() => handleExcluirProduto(prod.id)} 
+                            className="p-2 border border-destructive/20 text-destructive/70 hover:bg-destructive/10 hover:text-destructive rounded-lg transition-colors"
+                          >
+                            <Trash2 className="h-4 w-4" />
+                          </button>
+                        </div>
+                      </td>
+                    </tr>
+                  );
+                })}
               </tbody>
             </table>
           </div>
