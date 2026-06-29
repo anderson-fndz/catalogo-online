@@ -1,22 +1,15 @@
 import type { Metadata } from "next";
-import { Playfair_Display, Plus_Jakarta_Sans } from "next/font/google";
+import { Inter } from "next/font/google";
 import "./globals.css";
 
-const playfair = Playfair_Display({
-  subsets: ["latin"],
-  variable: "--font-serif",
-  display: "swap",
-});
+// 🔴 AQUI ESTÁ O SEGREDO: Importando o carrinho para a raiz do site
+import { CarrinhoLateral } from "@/components/CarrinhoLateral";
 
-const jakarta = Plus_Jakarta_Sans({
-  subsets: ["latin"],
-  variable: "--font-sans",
-  display: "swap",
-});
+const inter = Inter({ subsets: ["latin"] });
 
 export const metadata: Metadata = {
-  title: "Jordan Collection | Central Operacional",
-  description: "Plataforma de gestão de catálogo e atacado premium.",
+  title: "Jordan Collection | Atacado",
+  description: "Catálogo exclusivo para lojistas e revendedores.",
 };
 
 export default function RootLayout({
@@ -25,10 +18,15 @@ export default function RootLayout({
   children: React.ReactNode;
 }>) {
   return (
-    <html lang="pt-BR" className={`${playfair.variable} ${jakarta.variable}`}>
-      {/* O suppressHydrationWarning impede que extensões como ColorZilla quebrem a tela */}
-      <body className="font-sans antialiased" suppressHydrationWarning>
+    <html lang="pt-BR">
+      <body className={inter.className}>
+        
+        {/* O site todo renderiza aqui dentro */}
         {children}
+        
+        {/* A gaveta do carrinho fica escondida aqui, esperando ser chamada */}
+        <CarrinhoLateral />
+        
       </body>
     </html>
   );

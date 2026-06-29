@@ -4,20 +4,16 @@ import { useState, useEffect } from "react";
 import { supabase } from "@/lib/supabase";
 import { Navbar } from "@/components/Navbar";
 import { useRouter } from "next/navigation";
-import { Plus, Image as ImageIcon, Loader2, CheckCircle, AlertCircle, RefreshCw, FolderPlus, ChevronLeft, ChevronRight, X, Edit3, Palette, Search, Trash2, Layers, Scissors, Eye, EyeOff, Ruler } from "lucide-react";
+import { Plus, Image as ImageIcon, Loader2, CheckCircle, AlertCircle, RefreshCw, FolderPlus, ChevronLeft, ChevronRight, X, Edit3, Palette, Search, Trash2, Layers, Scissors, Eye, EyeOff, Ruler, Edit2, Check } from "lucide-react";
 import { Button } from "@/components/ui/button";
 
-// O "Cérebro" de ordenação lógica de moda
 const ORDEM_TAMANHOS = ["PP", "P", "M", "G", "GG", "XG", "EXG", "G1", "G2", "G3", "G4", "G5", "U", "ÚNICO"];
-
 const ordenarTamanhos = (a: string, b: string) => {
   const indexA = ORDEM_TAMANHOS.indexOf(a.toUpperCase());
   const indexB = ORDEM_TAMANHOS.indexOf(b.toUpperCase());
-  
   if (indexA !== -1 && indexB !== -1) return indexA - indexB;
   if (indexA !== -1) return -1;
   if (indexB !== -1) return 1;
-  
   return a.localeCompare(b, undefined, { numeric: true, sensitivity: "base" });
 };
 
@@ -25,7 +21,6 @@ export default function AdminPage() {
   const router = useRouter();
   const [verificandoAuth, setVerificandoAuth] = useState(true);
 
-  // Listas vindas do Banco de Dados
   const [produtos, setProdutos] = useState<any[]>([]);
   const [listaCoresBanco, setListaCoresBanco] = useState<any[]>([]);
   const [listaTecidosBanco, setListaTecidosBanco] = useState<any[]>([]);
@@ -34,7 +29,6 @@ export default function AdminPage() {
   const [carregando, setCarregando] = useState(true);
   const [editandoId, setEditandoId] = useState<string | null>(null);
 
-  // Estados do Formulário de Produto
   const [nome, setNome] = useState("");
   const [preco, setPreco] = useState("");
   const [descricao, setDescricao] = useState("");
@@ -48,18 +42,17 @@ export default function AdminPage() {
   const [emPromocao, setEmPromocao] = useState(false);
   const [fotosPreview, setFotosPreview] = useState<{file?: File, url: string}[]>([]);
   
-  // Estados para Injetar Novos Atributos na Base (Inline)
   const [buscaCor, setBuscaCor] = useState("");
   const [formCorAberto, setFormCorAberto] = useState(false);
   const [novaCorNome, setNovaCorNome] = useState("");
   const [novaCorHex, setNovaCorHex] = useState("#5C1226");
+  
+  const [corEmEdicao, setCorEmEdicao] = useState<{id: string, nome: string, hex: string} | null>(null);
 
   const [formTamanhoAberto, setFormTamanhoAberto] = useState(false);
   const [novoTamanhoNome, setNovoTamanhoNome] = useState("");
-
   const [formTecidoAberto, setFormTecidoAberto] = useState(false);
   const [novoTecidoNome, setNovoTecidoNome] = useState("");
-
   const [formModelagemAberto, setFormModelagemAberto] = useState(false);
   const [novaModelagemNome, setNovaModelagemNome] = useState("");
 
@@ -72,8 +65,12 @@ export default function AdminPage() {
 
   async function checarAutenticacao() {
     const { data: { session } } = await supabase.auth.getSession();
-    if (!session) router.push("/login");
-    else {
+    
+    // 🔴 AQUI É A CORREÇÃO DO LOOP INFINITO
+    if (!session) {
+      setVerificandoAuth(false);
+      router.push("/admin"); // Assumindo que a sua tela de login fica na raiz do painel Admin
+    } else {
       await carregarDadosIniciais();
       setVerificandoAuth(false);
     }
@@ -130,11 +127,21 @@ export default function AdminPage() {
     }
   };
 
-  // Funções de Cadastro Inline
   const handleCadastrarNovaCor = async () => {
     if (!novaCorNome) return;
     const { error } = await supabase.from("cores").insert([{ nome: novaCorNome.trim(), hex: novaCorHex }]);
     if (!error) { setNovaCorNome(""); setFormCorAberto(false); buscarCores(); }
+  };
+
+  const handleSalvarEdicaoCor = async () => {
+    if (!corEmEdicao || !corEmEdicao.nome) return;
+    const { error } = await supabase.from("cores").update({ nome: corEmEdicao.nome.trim(), hex: corEmEdicao.hex }).eq("id", corEmEdicao.id);
+    if (!error) {
+      setCorEmEdicao(null);
+      buscarCores();
+    } else {
+      alert("Erro ao atualizar cor.");
+    }
   };
 
   const handleCadastrarNovoTamanho = async () => {
@@ -155,7 +162,6 @@ export default function AdminPage() {
     if (!error) { setNovaModelagemNome(""); setCategoriaTamanho(novaModelagemNome.trim()); setFormModelagemAberto(false); buscarModelagens(); }
   };
 
-  // Funções de Exclusão Inline
   const handleExcluirCor = async (id: string) => {
     if (window.confirm("Excluir esta cor da sua base?")) { await supabase.from("cores").delete().eq("id", id); buscarCores(); }
   };
@@ -281,8 +287,6 @@ export default function AdminPage() {
     setEditandoId(null); setNome(""); setPreco(""); setDescricao(""); setCoresSelecionadas([]);
     setTamanhosSelecionados([]); setLinkDrive(""); setQtdMinima("0"); setStatusEstoque("Em Estoque"); setFotosPreview([]);
     setTecido(listaTecidosBanco[0]?.nome || ""); setCategoriaTamanho(listaModelagensBanco[0]?.nome || ""); setEmPromocao(false);
-    
-    // Fechar os formulários inline se estiverem abertos
     setFormCorAberto(false); setFormTamanhoAberto(false); setFormTecidoAberto(false); setFormModelagemAberto(false);
   };
 
@@ -330,9 +334,7 @@ export default function AdminPage() {
           ))}
         </div>
 
-        {/* ========================================== */}
-        {/* FORMULÁRIO CENTRALIZADO (SEM PAINEL LATERAL) */}
-        {/* ========================================== */}
+        {/* FORMULÁRIO DE PRODUTO */}
         <div className="bg-card border border-border/60 rounded-xl shadow-sm p-6 sm:p-8 space-y-8 min-w-0 overflow-hidden max-w-5xl mx-auto">
           <h2 className="text-lg font-semibold text-foreground flex items-center gap-2 font-serif border-b border-border/50 pb-3">
             <FolderPlus className="h-4 w-4 text-primary shrink-0" />
@@ -341,7 +343,6 @@ export default function AdminPage() {
 
           <form onSubmit={handleSalvarProduto} className="space-y-8 min-w-0">
             
-            {/* LINHA 1: NOME, PREÇO E FOTOS */}
             <div className="grid grid-cols-1 md:grid-cols-3 gap-6">
               <div className="flex flex-col gap-1.5 md:col-span-1">
                 <label className="text-[11px] font-bold text-muted-foreground uppercase tracking-wider">Nome da Peça *</label>
@@ -361,7 +362,6 @@ export default function AdminPage() {
               </div>
             </div>
 
-            {/* FOTOS SELECIONADAS */}
             {fotosPreview.length > 0 && (
               <div className="w-full min-w-0 overflow-hidden">
                 <div className="flex gap-3 overflow-x-auto py-3 px-3 bg-[#faf8f5]/80 border border-dashed border-border rounded-xl">
@@ -380,7 +380,7 @@ export default function AdminPage() {
               </div>
             )}
 
-            {/* LINHA 2: WIDGET DE CORES (INLINE CREATION) */}
+            {/* WIDGET DE CORES */}
             <div className="bg-secondary/5 border border-border/50 rounded-xl p-4 space-y-3">
               <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-3">
                 <div className="flex items-center gap-2">
@@ -406,25 +406,46 @@ export default function AdminPage() {
                 </div>
               )}
 
-              <div className="flex gap-2 flex-wrap p-3 border border-border/60 rounded-lg bg-card/50 max-h-40 overflow-y-auto">
+              <div className="flex gap-2 flex-wrap p-3 border border-border/60 rounded-lg bg-card/50 max-h-48 overflow-y-auto">
                 {coresFiltradas.map((c) => {
                   const ativo = coresSelecionadas.includes(c.nome);
+                  
+                  if (corEmEdicao?.id === c.id) {
+                    return (
+                      <div key={c.id} className="flex items-center gap-2 bg-background p-1.5 pr-2 border border-primary/50 rounded-full shadow-sm animate-in zoom-in-95">
+                        <input type="color" value={corEmEdicao.hex} onChange={e => setCorEmEdicao({...corEmEdicao, hex: e.target.value})} className="w-6 h-6 rounded-full border border-border cursor-pointer p-0 bg-transparent" />
+                        <input type="text" value={corEmEdicao.nome} onChange={e => setCorEmEdicao({...corEmEdicao, nome: e.target.value})} className="w-24 text-xs font-bold bg-transparent focus:outline-none border-b border-border/50 px-1" autoFocus />
+                        <button type="button" onClick={handleSalvarEdicaoCor} className="p-1 hover:bg-emerald-50 rounded-full text-emerald-600 transition-colors">
+                          <Check size={14} strokeWidth={3} />
+                        </button>
+                        <button type="button" onClick={() => setCorEmEdicao(null)} className="p-1 hover:bg-destructive/10 rounded-full text-destructive transition-colors">
+                          <X size={14} strokeWidth={3} />
+                        </button>
+                      </div>
+                    );
+                  }
+
                   return (
-                    <div key={c.id} className="relative group">
+                    <div key={c.id} className="relative group flex items-center">
                       <button type="button" onClick={() => toggleCorSelecao(c.nome)} className={`flex items-center gap-2 px-3 py-1.5 border rounded-full text-xs font-semibold transition-all ${ativo ? "border-primary bg-primary/5 text-primary ring-1 ring-primary" : "border-border/80 bg-card text-muted-foreground hover:border-muted-foreground"}`}>
                         <div className="w-3 h-3 rounded-full border border-black/10 shadow-inner" style={{ backgroundColor: c.hex }} />
                         {c.nome}
                       </button>
-                      <button type="button" onClick={() => handleExcluirCor(c.id)} title="Apagar do banco de dados" className="absolute -top-1.5 -right-1.5 hidden group-hover:flex items-center justify-center bg-destructive text-white rounded-full w-4 h-4 shadow-md hover:scale-110 transition-transform z-10">
-                        <X size={10} />
-                      </button>
+                      <div className="absolute -top-2.5 -right-2 hidden group-hover:flex items-center gap-0.5 z-10">
+                        <button type="button" onClick={() => setCorEmEdicao({id: c.id, nome: c.nome, hex: c.hex})} className="flex items-center justify-center bg-blue-500 text-white rounded-full w-5 h-5 shadow-md hover:scale-110 transition-transform">
+                          <Edit2 size={10} strokeWidth={3} />
+                        </button>
+                        <button type="button" onClick={() => handleExcluirCor(c.id)} className="flex items-center justify-center bg-destructive text-white rounded-full w-5 h-5 shadow-md hover:scale-110 transition-transform">
+                          <X size={12} strokeWidth={3} />
+                        </button>
+                      </div>
                     </div>
                   );
                 })}
               </div>
             </div>
 
-            {/* LINHA 3: WIDGET DE TAMANHOS (INLINE CREATION) */}
+            {/* WIDGET DE TAMANHOS */}
             <div className="bg-secondary/5 border border-border/50 rounded-xl p-4 space-y-3">
               <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-3">
                 <div className="flex items-center gap-2">
@@ -451,20 +472,16 @@ export default function AdminPage() {
                       <button type="button" onClick={() => toggleTamanhoSelecao(t.nome)} className={`px-4 py-1.5 border rounded-lg text-xs font-bold transition-all min-w-[3rem] ${ativo ? "border-primary bg-primary text-primary-foreground shadow-sm" : "border-border/80 bg-card text-muted-foreground hover:border-muted-foreground"}`}>
                         {t.nome}
                       </button>
-                      <button type="button" onClick={() => handleExcluirTamanho(t.id)} title="Apagar do banco de dados" className="absolute -top-1.5 -right-1.5 hidden group-hover:flex items-center justify-center bg-destructive text-white rounded-full w-4 h-4 shadow-md hover:scale-110 transition-transform z-10">
+                      <button type="button" onClick={() => handleExcluirTamanho(t.id)} className="absolute -top-1.5 -right-1.5 hidden group-hover:flex items-center justify-center bg-destructive text-white rounded-full w-4 h-4 shadow-md hover:scale-110 transition-transform z-10">
                         <X size={10} />
                       </button>
                     </div>
                   );
                 })}
-                {tamanhosOrdenados.length === 0 && <span className="text-xs text-muted-foreground italic">Nenhum tamanho cadastrado. Crie um novo.</span>}
               </div>
             </div>
 
-            {/* LINHA 4: TECIDO E MODELAGEM (INLINE CREATION) */}
             <div className="grid grid-cols-1 sm:grid-cols-2 gap-6">
-              
-              {/* Box Tecido */}
               <div className="flex flex-col gap-2 p-4 border border-border/60 rounded-xl bg-secondary/5">
                 <div className="flex items-center justify-between">
                   <label className="text-[11px] font-bold text-muted-foreground uppercase tracking-wider flex items-center gap-1.5"><Scissors className="w-3.5 h-3.5"/> Tecido *</label>
@@ -483,14 +500,13 @@ export default function AdminPage() {
                     <select value={tecido} onChange={e => setTecido(e.target.value)} className="border border-border/80 bg-card rounded-lg px-3 h-10 text-sm focus:outline-none cursor-pointer font-medium flex-1">
                       {listaTecidosBanco.map(t => <option key={t.id} value={t.nome}>{t.nome}</option>)}
                     </select>
-                    <Button type="button" variant="outline" onClick={handleExcluirTecido} title="Excluir tecido selecionado" className="h-10 w-10 p-0 border-destructive/20 hover:bg-destructive/10 text-destructive">
+                    <Button type="button" variant="outline" onClick={handleExcluirTecido} className="h-10 w-10 p-0 border-destructive/20 hover:bg-destructive/10 text-destructive">
                       <Trash2 className="h-4 w-4" />
                     </Button>
                   </div>
                 )}
               </div>
 
-              {/* Box Modelagem */}
               <div className="flex flex-col gap-2 p-4 border border-border/60 rounded-xl bg-secondary/5">
                 <div className="flex items-center justify-between">
                   <label className="text-[11px] font-bold text-muted-foreground uppercase tracking-wider flex items-center gap-1.5"><Layers className="w-3.5 h-3.5"/> Modelagem *</label>
@@ -509,7 +525,7 @@ export default function AdminPage() {
                     <select value={categoriaTamanho} onChange={e => setCategoriaTamanho(e.target.value)} className="border border-border/80 bg-card rounded-lg px-3 h-10 text-sm focus:outline-none cursor-pointer font-medium flex-1">
                       {listaModelagensBanco.map(m => <option key={m.id} value={m.nome}>{m.nome}</option>)}
                     </select>
-                    <Button type="button" variant="outline" onClick={handleExcluirModelagem} title="Excluir modelagem selecionada" className="h-10 w-10 p-0 border-destructive/20 hover:bg-destructive/10 text-destructive">
+                    <Button type="button" variant="outline" onClick={handleExcluirModelagem} className="h-10 w-10 p-0 border-destructive/20 hover:bg-destructive/10 text-destructive">
                       <Trash2 className="h-4 w-4" />
                     </Button>
                   </div>
@@ -517,7 +533,6 @@ export default function AdminPage() {
               </div>
             </div>
 
-            {/* LINHA 5: INFOS EXTRAS */}
             <div className="grid grid-cols-1 sm:grid-cols-3 gap-6">
               <div className="flex flex-col gap-1.5">
                 <label className="text-[11px] font-bold text-muted-foreground uppercase tracking-wider">Mínimo / Lote</label>
@@ -569,9 +584,7 @@ export default function AdminPage() {
           </form>
         </div>
 
-        {/* ========================================== */}
-        {/* LISTA DE PRODUTOS COM A NOVA COLUNA        */}
-        {/* ========================================== */}
+        {/* LISTA DE PRODUTOS */}
         <div className="bg-card border border-border/60 rounded-xl shadow-sm overflow-hidden min-w-0">
           <div className="p-5 sm:p-6 border-b border-border/50 flex justify-between items-center bg-secondary/20">
             <div>
@@ -595,7 +608,6 @@ export default function AdminPage() {
               <tbody className="divide-y divide-border/50 text-sm">
                 {produtos.map((prod) => {
                   const isAtivo = prod.ativo === undefined ? true : prod.ativo;
-                  
                   return (
                     <tr key={prod.id} className={`transition-colors ${isAtivo ? "hover:bg-secondary/5" : "bg-muted/30 opacity-70"}`}>
                       <td className="p-4">
@@ -615,8 +627,6 @@ export default function AdminPage() {
                         </div>
                         <div className={`text-xs font-bold mt-1 ${isAtivo ? "text-primary" : "text-muted-foreground"}`}>R$ {Number(prod.preco).toFixed(2).replace(".", ",")}</div>
                       </td>
-                      
-                      {/* COLUNA ANTIGA: APENAS TECIDO E MODELAGEM */}
                       <td className={`p-4 ${isAtivo ? "text-muted-foreground" : "text-muted-foreground/60"}`}>
                         <div className="font-semibold">{prod.tecido || "Não especificado"}</div>
                         <div className="text-xs mt-0.5 flex gap-2 items-center mb-1.5">
@@ -624,8 +634,6 @@ export default function AdminPage() {
                           {prod.em_promocao && <span className="text-[9px] bg-emerald-50 text-emerald-700 border border-emerald-200 px-1.5 py-0.2 rounded font-bold uppercase tracking-wider">Liquidação</span>}
                         </div>
                       </td>
-
-                      {/* NOVA COLUNA: APENAS TAMANHOS */}
                       <td className="p-4">
                         {prod.grade_tamanhos && prod.grade_tamanhos.length > 0 ? (
                           <div className="flex flex-wrap gap-1 mt-1">
@@ -637,28 +645,15 @@ export default function AdminPage() {
                           <span className="text-[9px] italic text-muted-foreground/50">Sem tamanhos</span>
                         )}
                       </td>
-
                       <td className="p-4">
                         <div className="flex items-center justify-center gap-2">
-                          <button 
-                            title={isAtivo ? "Ocultar na vitrine" : "Mostrar na vitrine"}
-                            onClick={() => alternarVisibilidade(prod.id, prod.ativo)} 
-                            className={`p-2 rounded-lg transition-colors border ${isAtivo ? "border-border/80 text-muted-foreground hover:bg-secondary/40 hover:text-foreground" : "border-primary/30 bg-primary/5 text-primary hover:bg-primary/10"}`}
-                          >
+                          <button onClick={() => alternarVisibilidade(prod.id, prod.ativo)} className={`p-2 rounded-lg transition-colors border ${isAtivo ? "border-border/80 text-muted-foreground hover:bg-secondary/40 hover:text-foreground" : "border-primary/30 bg-primary/5 text-primary hover:bg-primary/10"}`}>
                             {isAtivo ? <Eye className="h-4 w-4" /> : <EyeOff className="h-4 w-4" />}
                           </button>
-                          <button 
-                            title="Editar produto"
-                            onClick={() => handleEntrarModoEdicao(prod)} 
-                            className="p-2 border border-border/80 text-muted-foreground hover:bg-secondary/40 hover:text-foreground rounded-lg transition-colors"
-                          >
+                          <button onClick={() => handleEntrarModoEdicao(prod)} className="p-2 border border-border/80 text-muted-foreground hover:bg-secondary/40 hover:text-foreground rounded-lg transition-colors">
                             <Edit3 className="h-4 w-4" />
                           </button>
-                          <button 
-                            title="Excluir permanentemente"
-                            onClick={() => handleExcluirProduto(prod.id)} 
-                            className="p-2 border border-destructive/20 text-destructive/70 hover:bg-destructive/10 hover:text-destructive rounded-lg transition-colors"
-                          >
+                          <button onClick={() => handleExcluirProduto(prod.id)} className="p-2 border border-destructive/20 text-destructive/70 hover:bg-destructive/10 hover:text-destructive rounded-lg transition-colors">
                             <Trash2 className="h-4 w-4" />
                           </button>
                         </div>
