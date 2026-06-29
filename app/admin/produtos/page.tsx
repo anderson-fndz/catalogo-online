@@ -66,10 +66,9 @@ export default function AdminPage() {
   async function checarAutenticacao() {
     const { data: { session } } = await supabase.auth.getSession();
     
-    // 🔴 AQUI É A CORREÇÃO DO LOOP INFINITO
     if (!session) {
       setVerificandoAuth(false);
-      router.push("/admin"); // Assumindo que a sua tela de login fica na raiz do painel Admin
+      router.push("/admin"); 
     } else {
       await carregarDadosIniciais();
       setVerificandoAuth(false);
@@ -410,11 +409,12 @@ export default function AdminPage() {
                 {coresFiltradas.map((c) => {
                   const ativo = coresSelecionadas.includes(c.nome);
                   
+                  // 🔴 AQUI É A BLINDAGEM DO TYPESCRIPT (usamos o ?. para evitar erros nulos)
                   if (corEmEdicao?.id === c.id) {
                     return (
                       <div key={c.id} className="flex items-center gap-2 bg-background p-1.5 pr-2 border border-primary/50 rounded-full shadow-sm animate-in zoom-in-95">
-                        <input type="color" value={corEmEdicao.hex} onChange={e => setCorEmEdicao({...corEmEdicao, hex: e.target.value})} className="w-6 h-6 rounded-full border border-border cursor-pointer p-0 bg-transparent" />
-                        <input type="text" value={corEmEdicao.nome} onChange={e => setCorEmEdicao({...corEmEdicao, nome: e.target.value})} className="w-24 text-xs font-bold bg-transparent focus:outline-none border-b border-border/50 px-1" autoFocus />
+                        <input type="color" value={corEmEdicao?.hex || ""} onChange={e => corEmEdicao && setCorEmEdicao({...corEmEdicao, hex: e.target.value})} className="w-6 h-6 rounded-full border border-border cursor-pointer p-0 bg-transparent" />
+                        <input type="text" value={corEmEdicao?.nome || ""} onChange={e => corEmEdicao && setCorEmEdicao({...corEmEdicao, nome: e.target.value})} className="w-24 text-xs font-bold bg-transparent focus:outline-none border-b border-border/50 px-1" autoFocus />
                         <button type="button" onClick={handleSalvarEdicaoCor} className="p-1 hover:bg-emerald-50 rounded-full text-emerald-600 transition-colors">
                           <Check size={14} strokeWidth={3} />
                         </button>
