@@ -168,7 +168,7 @@ export function PublicHeader() {
             <div className="w-full md:w-1/3 flex justify-between md:justify-center items-center">
               <Link href="/" className="flex items-center gap-2 group">
                 <div className="bg-primary text-secondary p-2 rounded-lg font-serif font-bold text-xl leading-none shadow-sm group-hover:bg-primary/90 transition-colors">JC</div>
-                <div className="flex flex-col"><span className="font-serif font-bold text-2xl text-foreground tracking-tight leading-none group-hover:text-primary transition-colors">Jordan</span></div>
+                <div className="flex flex-col"><span className="font-serif font-bold text-2xl text-foreground tracking-tight leading-none group-hover:text-primary transition-colors">Jordan Collection</span></div>
               </Link>
               <div className="flex md:hidden items-center gap-4">
                 <Link href="/admin" className="text-foreground hover:text-primary"><User size={22} /></Link>
@@ -181,7 +181,7 @@ export function PublicHeader() {
 
             {/* ÍCONES DIREITA */}
             <div className="w-full md:w-1/3 hidden md:flex justify-end items-center gap-6 text-sm font-medium">
-              <Link href="/admin" className="flex items-center gap-2 text-foreground hover:text-primary transition-colors border-r border-border/60 pr-6"><User size={20} /> Área Restrita</Link>
+              <Link href="/admin" className="flex items-center gap-2 text-foreground hover:text-primary transition-colors border-r border-border/60 pr-6"><User size={20} /> Administrador</Link>
               <button onClick={() => setAberto(true)} className="flex items-center text-foreground hover:text-primary transition-colors relative">
                 <ShoppingCart size={26} />
                 <span className="absolute -top-1.5 -right-2 bg-[#111] text-white text-[10px] font-bold h-4 w-4 rounded-full flex items-center justify-center shadow-sm">{qtdCarrinho}</span>

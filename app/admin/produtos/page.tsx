@@ -609,6 +609,7 @@ export default function AdminPage() {
                 <select value={statusEstoque} onChange={e => setStatusEstoque(e.target.value)} className="border border-border/80 bg-[#faf8f5]/40 rounded-lg px-3 h-10 text-sm focus:outline-none cursor-pointer font-bold text-foreground">
                   <option value="Em Estoque">🟢 Disponível</option>
                   <option value="Poucas Unidades">🟡 Lote Crítico (Poucas Unidades)</option>
+                  <option value="Chegando">⏳ Prestes a Chegar</option>  {/* 🔴 ADICIONE ESTA LINHA */}
                   <option value="Esgotado">🔴 Esgotado</option>
                 </select>
               </div>

@@ -4,14 +4,14 @@ import { useEffect, useState, Suspense } from "react";
 import { supabase } from "@/lib/supabase";
 import { Loader2, Truck, CreditCard, Package, ShieldCheck, ChevronRight, AlertTriangle, ShoppingCart, SearchX } from "lucide-react";
 import Link from "next/link";
-import { useSearchParams } from "next/navigation"; // 🔴 Import para ler a URL
+import { useSearchParams } from "next/navigation";
 import { PublicHeader } from "@/components/PublicHeader";
 import { PublicFooter } from "@/components/PublicFooter";
 
 // Componente Interno que faz a mágica acontecer
 function VitrineConteudo() {
   const searchParams = useSearchParams();
-  const termoBusca = searchParams.get("busca"); // Pega o que o usuário digitou
+  const termoBusca = searchParams.get("busca");
 
   const [produtos, setProdutos] = useState<any[]>([]);
   const [categorias, setCategorias] = useState<any[]>([]);
@@ -63,12 +63,12 @@ function VitrineConteudo() {
       <div className="min-h-screen bg-background flex flex-col items-center justify-center gap-4">
         <Loader2 className="h-8 w-8 animate-spin text-primary" />
         <div className="font-serif text-xl font-bold text-foreground tracking-widest">Jordan Collection</div>
-        <p className="text-xs text-muted-foreground uppercase tracking-widest animate-pulse">A carregar catálogo...</p>
+        <p className="text-xs text-muted-foreground uppercase tracking-widest animate-pulse">Montando vitrine...</p>
       </div>
     );
   }
 
-  // 🔴 SE O USUÁRIO FEZ UMA BUSCA, MOSTRA A TELA DE RESULTADOS
+  // 🔴 TELA DE RESULTADOS DA BUSCA
   if (termoBusca) {
     const produtosFiltrados = produtos.filter(p => 
       p.nome?.toLowerCase().includes(termoBusca.toLowerCase()) || 
@@ -106,6 +106,13 @@ function VitrineConteudo() {
               {produtosFiltrados.map(prod => (
                 <Link href={`/produto/${prod.id}`} key={prod.id} className="group flex flex-col bg-card hover:shadow-xl transition-all duration-300 border border-transparent hover:border-border/60 rounded-xl overflow-hidden relative cursor-pointer">
                   <div className="relative aspect-[3/4] bg-secondary/20 overflow-hidden">
+                    {/* ETIQUETAS DINÂMICAS */}
+                    {prod.status_estoque === "Chegando" && (
+                      <div className="absolute top-2 left-2 z-10 bg-blue-600 text-white text-[9px] font-bold px-2 py-1 rounded uppercase tracking-wider shadow-sm">Prestes a Chegar</div>
+                    )}
+                    {prod.status_estoque === "Poucas Unidades" && (
+                      <div className="absolute top-2 left-2 z-10 bg-amber-600 text-white text-[9px] font-bold px-2 py-1 rounded uppercase tracking-wider shadow-sm">Últimas Peças</div>
+                    )}
                     <img src={prod.imagens?.[0]} alt={prod.nome} className="w-full h-full object-cover transition-transform duration-700 group-hover:scale-105" />
                   </div>
                   <div className="p-4 flex flex-col flex-1 items-center text-center">
@@ -127,7 +134,7 @@ function VitrineConteudo() {
     );
   }
 
-  // 🔴 SE NÃO TEM BUSCA, MOSTRA A VITRINE NORMAL
+  // 🔴 VITRINE NORMAL (SEM BUSCA)
   const ultimasPecas = produtos.filter(p => p.status_estoque === "Poucas Unidades");
 
   return (
@@ -139,9 +146,12 @@ function VitrineConteudo() {
         <div className="relative z-10 text-center space-y-4 px-4">
           <span className="text-secondary/80 font-bold uppercase tracking-[0.3em] text-xs sm:text-sm drop-shadow-md">Especialistas em Conjuntos</span>
           <h1 className="text-4xl sm:text-6xl md:text-7xl font-bold text-secondary font-serif tracking-tight drop-shadow-xl uppercase">Inverno 2026</h1>
-          <button className="mt-6 bg-secondary text-primary font-bold uppercase tracking-widest text-xs px-8 py-4 rounded-full shadow-2xl hover:bg-white transition-all hover:scale-105">
+          
+          {/* 🔴 AQUI ESTÁ O BOTÃO ATUALIZADO LINKANDO PARA A CATEGORIA */}
+          <Link href="#Coleção Inverno" className="mt-6 inline-block bg-secondary text-primary font-bold uppercase tracking-widest text-xs px-8 py-4 rounded-full shadow-2xl hover:bg-white transition-all hover:scale-105">
             Ver Lançamentos
-          </button>
+          </Link>
+
         </div>
       </div>
 
@@ -207,6 +217,13 @@ function VitrineConteudo() {
                 {prods.map(prod => (
                   <Link href={`/produto/${prod.id}`} key={prod.id} className="group flex flex-col bg-card hover:shadow-xl transition-all duration-300 border border-transparent hover:border-border/60 rounded-xl overflow-hidden relative cursor-pointer">
                     <div className="relative aspect-[3/4] bg-secondary/20 overflow-hidden">
+                      {/* ETIQUETAS DINÂMICAS NA CATEGORIA */}
+                      {prod.status_estoque === "Chegando" && (
+                        <div className="absolute top-2 left-2 z-10 bg-blue-600 text-white text-[9px] font-bold px-2 py-1 rounded uppercase tracking-wider shadow-sm">Prestes a Chegar</div>
+                      )}
+                      {prod.status_estoque === "Poucas Unidades" && (
+                        <div className="absolute top-2 left-2 z-10 bg-amber-600 text-white text-[9px] font-bold px-2 py-1 rounded uppercase tracking-wider shadow-sm">Últimas Peças</div>
+                      )}
                       <img src={prod.imagens?.[0]} alt={prod.nome} className="w-full h-full object-cover transition-transform duration-700 group-hover:scale-105" />
                     </div>
                     <div className="p-4 flex flex-col flex-1 items-center text-center">
