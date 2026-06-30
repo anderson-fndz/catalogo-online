@@ -4,7 +4,7 @@ import { useState, useEffect } from "react";
 import { supabase } from "@/lib/supabase";
 import { Navbar } from "@/components/Navbar";
 import { useRouter } from "next/navigation";
-import { Plus, Image as ImageIcon, Loader2, CheckCircle, AlertCircle, RefreshCw, FolderPlus, ChevronLeft, ChevronRight, X, Edit3, Palette, Search, Trash2, Layers, Scissors, Eye, EyeOff, Ruler, Edit2, Check } from "lucide-react";
+import { Plus, Image as ImageIcon, Loader2, CheckCircle, AlertCircle, RefreshCw, FolderPlus, ChevronLeft, ChevronRight, X, Edit3, Palette, Search, Trash2, Layers, Scissors, Eye, EyeOff, Ruler, Edit2, Check, Tag } from "lucide-react";
 import { Button } from "@/components/ui/button";
 
 const ORDEM_TAMANHOS = ["PP", "P", "M", "G", "GG", "XG", "EXG", "G1", "G2", "G3", "G4", "G5", "U", "ÚNICO"];
@@ -26,6 +26,7 @@ export default function AdminPage() {
   const [listaTecidosBanco, setListaTecidosBanco] = useState<any[]>([]);
   const [listaModelagensBanco, setListaModelagensBanco] = useState<any[]>([]);
   const [listaTamanhosBanco, setListaTamanhosBanco] = useState<any[]>([]);
+  const [listaCategoriasBanco, setListaCategoriasBanco] = useState<any[]>([]); // 🔴 NOVO
   const [carregando, setCarregando] = useState(true);
   const [editandoId, setEditandoId] = useState<string | null>(null);
 
@@ -36,6 +37,7 @@ export default function AdminPage() {
   const [tamanhosSelecionados, setTamanhosSelecionados] = useState<string[]>([]);
   const [tecido, setTecido] = useState("");
   const [categoriaTamanho, setCategoriaTamanho] = useState("");
+  const [categoria, setCategoria] = useState(""); // 🔴 NOVO: Categoria do produto sendo cadastrado
   const [linkDrive, setLinkDrive] = useState("");
   const [qtdMinima, setQtdMinima] = useState("0");
   const [statusEstoque, setStatusEstoque] = useState("Em Estoque");
@@ -55,6 +57,8 @@ export default function AdminPage() {
   const [novoTecidoNome, setNovoTecidoNome] = useState("");
   const [formModelagemAberto, setFormModelagemAberto] = useState(false);
   const [novaModelagemNome, setNovaModelagemNome] = useState("");
+  const [formCategoriaAberto, setFormCategoriaAberto] = useState(false); // 🔴 NOVO
+  const [novaCategoriaNome, setNovaCategoriaNome] = useState(""); // 🔴 NOVO
 
   const [enviando, setEnviando] = useState(false);
   const [statusMensagem, setStatusMensagem] = useState<{ tipo: "sucesso" | "erro"; texto: string } | null>(null);
@@ -77,7 +81,14 @@ export default function AdminPage() {
 
   async function carregarDadosIniciais() {
     setCarregando(true);
-    await Promise.all([buscarProdutos(), buscarCores(), buscarTecidos(), buscarModelagens(), buscarTamanhos()]);
+    await Promise.all([
+      buscarProdutos(), 
+      buscarCores(), 
+      buscarTecidos(), 
+      buscarModelagens(), 
+      buscarTamanhos(),
+      buscarCategorias() // 🔴 NOVO
+    ]);
     setCarregando(false);
   }
 
@@ -110,6 +121,15 @@ export default function AdminPage() {
   async function buscarTamanhos() {
     const { data } = await supabase.from("tamanhos").select("*");
     if (data) setListaTamanhosBanco(data);
+  }
+
+  // 🔴 FUNÇÃO NOVA
+  async function buscarCategorias() {
+    const { data } = await supabase.from("categorias").select("*").order("nome", { ascending: true });
+    if (data) {
+      setListaCategoriasBanco(data);
+      if (data.length > 0 && !categoria) setCategoria(data[0].nome);
+    }
   }
 
   const alternarVisibilidade = async (id: string, ativoAtual: boolean) => {
@@ -161,6 +181,13 @@ export default function AdminPage() {
     if (!error) { setNovaModelagemNome(""); setCategoriaTamanho(novaModelagemNome.trim()); setFormModelagemAberto(false); buscarModelagens(); }
   };
 
+  // 🔴 FUNÇÃO NOVA
+  const handleCadastrarNovaCategoria = async () => {
+    if (!novaCategoriaNome) return;
+    const { error } = await supabase.from("categorias").insert([{ nome: novaCategoriaNome.trim() }]);
+    if (!error) { setNovaCategoriaNome(""); setCategoria(novaCategoriaNome.trim()); setFormCategoriaAberto(false); buscarCategorias(); }
+  };
+
   const handleExcluirCor = async (id: string) => {
     if (window.confirm("Excluir esta cor da sua base?")) { await supabase.from("cores").delete().eq("id", id); buscarCores(); }
   };
@@ -181,6 +208,16 @@ export default function AdminPage() {
       await supabase.from("modelagens").delete().eq("id", id); 
       setCategoriaTamanho(listaModelagensBanco[0]?.nome || "");
       buscarModelagens(); 
+    }
+  };
+
+  // 🔴 FUNÇÃO NOVA
+  const handleExcluirCategoria = async () => {
+    const id = listaCategoriasBanco.find(c => c.nome === categoria)?.id;
+    if (id && window.confirm(`Excluir a categoria '${categoria}' da base?`)) { 
+      await supabase.from("categorias").delete().eq("id", id); 
+      setCategoria(listaCategoriasBanco[0]?.nome || "");
+      buscarCategorias(); 
     }
   };
 
@@ -245,7 +282,7 @@ export default function AdminPage() {
         nome, preco: parseFloat(preco), descricao, imagens: urlsImagens,
         cores: coresSelecionadas, grade_tamanhos: tamanhosSelecionados, link_drive: linkDrive || null,
         qtd_minima: parseInt(qtdMinima) || 0, status_estoque: statusEstoque,
-        tecido, categoria_tamanho: categoriaTamanho, em_promocao: emPromocao,
+        tecido, categoria_tamanho: categoriaTamanho, categoria, em_promocao: emPromocao, // 🔴 ATUALIZADO
         ativo: true
       };
 
@@ -275,6 +312,7 @@ export default function AdminPage() {
     setQtdMinima(prod.qtd_minima?.toString() || "0"); setStatusEstoque(prod.status_estoque || "Em Estoque");
     setTecido(prod.tecido || (listaTecidosBanco[0]?.nome || ""));
     setCategoriaTamanho(prod.categoria_tamanho || (listaModelagensBanco[0]?.nome || ""));
+    setCategoria(prod.categoria || (listaCategoriasBanco[0]?.nome || "")); // 🔴 NOVO
     setEmPromocao(prod.em_promocao || false);
 
     const imagensAntigas = (prod.imagens || []).map((url: string) => ({ url }));
@@ -286,7 +324,8 @@ export default function AdminPage() {
     setEditandoId(null); setNome(""); setPreco(""); setDescricao(""); setCoresSelecionadas([]);
     setTamanhosSelecionados([]); setLinkDrive(""); setQtdMinima("0"); setStatusEstoque("Em Estoque"); setFotosPreview([]);
     setTecido(listaTecidosBanco[0]?.nome || ""); setCategoriaTamanho(listaModelagensBanco[0]?.nome || ""); setEmPromocao(false);
-    setFormCorAberto(false); setFormTamanhoAberto(false); setFormTecidoAberto(false); setFormModelagemAberto(false);
+    setCategoria(listaCategoriasBanco[0]?.nome || ""); // 🔴 NOVO
+    setFormCorAberto(false); setFormTamanhoAberto(false); setFormTecidoAberto(false); setFormModelagemAberto(false); setFormCategoriaAberto(false);
   };
 
   if (verificandoAuth) {
@@ -409,7 +448,6 @@ export default function AdminPage() {
                 {coresFiltradas.map((c) => {
                   const ativo = coresSelecionadas.includes(c.nome);
                   
-                  // 🔴 AQUI É A BLINDAGEM DO TYPESCRIPT (usamos o ?. para evitar erros nulos)
                   if (corEmEdicao?.id === c.id) {
                     return (
                       <div key={c.id} className="flex items-center gap-2 bg-background p-1.5 pr-2 border border-primary/50 rounded-full shadow-sm animate-in zoom-in-95">
@@ -481,7 +519,10 @@ export default function AdminPage() {
               </div>
             </div>
 
-            <div className="grid grid-cols-1 sm:grid-cols-2 gap-6">
+            {/* MATÉRIA / CORTE / CATEGORIA (TRINCA DE COMBOS) */}
+            <div className="grid grid-cols-1 md:grid-cols-3 gap-6">
+              
+              {/* Tecido */}
               <div className="flex flex-col gap-2 p-4 border border-border/60 rounded-xl bg-secondary/5">
                 <div className="flex items-center justify-between">
                   <label className="text-[11px] font-bold text-muted-foreground uppercase tracking-wider flex items-center gap-1.5"><Scissors className="w-3.5 h-3.5"/> Tecido *</label>
@@ -489,7 +530,6 @@ export default function AdminPage() {
                     {formTecidoAberto ? "Cancelar" : "+ Novo"}
                   </button>
                 </div>
-                
                 {formTecidoAberto ? (
                   <div className="flex gap-2 animate-in fade-in">
                     <input type="text" value={novoTecidoNome} onChange={e => setNovoTecidoNome(e.target.value)} placeholder="Ex: Lã Batida" className="border border-border/80 rounded-lg px-3 h-10 text-sm flex-1 focus:outline-none" />
@@ -507,6 +547,7 @@ export default function AdminPage() {
                 )}
               </div>
 
+              {/* Modelagem */}
               <div className="flex flex-col gap-2 p-4 border border-border/60 rounded-xl bg-secondary/5">
                 <div className="flex items-center justify-between">
                   <label className="text-[11px] font-bold text-muted-foreground uppercase tracking-wider flex items-center gap-1.5"><Layers className="w-3.5 h-3.5"/> Modelagem *</label>
@@ -514,7 +555,6 @@ export default function AdminPage() {
                     {formModelagemAberto ? "Cancelar" : "+ Nova"}
                   </button>
                 </div>
-                
                 {formModelagemAberto ? (
                   <div className="flex gap-2 animate-in fade-in">
                     <input type="text" value={novaModelagemNome} onChange={e => setNovaModelagemNome(e.target.value)} placeholder="Ex: Oversized" className="border border-border/80 rounded-lg px-3 h-10 text-sm flex-1 focus:outline-none" />
@@ -531,6 +571,32 @@ export default function AdminPage() {
                   </div>
                 )}
               </div>
+
+              {/* 🔴 NOVA SEÇÃO: Categoria Estrutural (Inverno, Plus Size, etc) */}
+              <div className="flex flex-col gap-2 p-4 border border-border/60 rounded-xl bg-secondary/5">
+                <div className="flex items-center justify-between">
+                  <label className="text-[11px] font-bold text-muted-foreground uppercase tracking-wider flex items-center gap-1.5"><Tag className="w-3.5 h-3.5"/> Categoria da Vitrine *</label>
+                  <button type="button" onClick={() => setFormCategoriaAberto(!formCategoriaAberto)} className="text-[10px] font-bold text-primary hover:underline uppercase tracking-wider">
+                    {formCategoriaAberto ? "Cancelar" : "+ Nova"}
+                  </button>
+                </div>
+                {formCategoriaAberto ? (
+                  <div className="flex gap-2 animate-in fade-in">
+                    <input type="text" value={novaCategoriaNome} onChange={e => setNovaCategoriaNome(e.target.value)} placeholder="Ex: Plus Size" className="border border-border/80 rounded-lg px-3 h-10 text-sm flex-1 focus:outline-none" />
+                    <Button type="button" onClick={handleCadastrarNovaCategoria} className="h-10 px-3 text-xs">Salvar</Button>
+                  </div>
+                ) : (
+                  <div className="flex gap-2">
+                    <select value={categoria} onChange={e => setCategoria(e.target.value)} className="border border-border/80 bg-card rounded-lg px-3 h-10 text-sm focus:outline-none cursor-pointer font-bold text-primary flex-1">
+                      {listaCategoriasBanco.map(c => <option key={c.id} value={c.nome}>{c.nome}</option>)}
+                    </select>
+                    <Button type="button" variant="outline" onClick={handleExcluirCategoria} title="Excluir categoria selecionada" className="h-10 w-10 p-0 border-destructive/20 hover:bg-destructive/10 text-destructive">
+                      <Trash2 className="h-4 w-4" />
+                    </Button>
+                  </div>
+                )}
+              </div>
+
             </div>
 
             <div className="grid grid-cols-1 sm:grid-cols-3 gap-6">
@@ -542,7 +608,7 @@ export default function AdminPage() {
                 <label className="text-[11px] font-bold text-muted-foreground uppercase tracking-wider">Disponibilidade</label>
                 <select value={statusEstoque} onChange={e => setStatusEstoque(e.target.value)} className="border border-border/80 bg-[#faf8f5]/40 rounded-lg px-3 h-10 text-sm focus:outline-none cursor-pointer font-bold text-foreground">
                   <option value="Em Estoque">🟢 Disponível</option>
-                  <option value="Poucas Unidades">🟡 Lote Crítico</option>
+                  <option value="Poucas Unidades">🟡 Lote Crítico (Poucas Unidades)</option>
                   <option value="Esgotado">🔴 Esgotado</option>
                 </select>
               </div>
@@ -551,7 +617,7 @@ export default function AdminPage() {
                   <label className="text-[11px] font-bold text-emerald-600 uppercase tracking-wider">Ação Comercial</label>
                   <select value={emPromocao ? "sim" : "nao"} onChange={e => setEmPromocao(e.target.value === "sim")} className={`border rounded-lg px-3 h-10 text-sm focus:outline-none cursor-pointer font-bold ${emPromocao ? "border-emerald-200 bg-emerald-50/50 text-emerald-700" : "border-border/80 bg-card text-muted-foreground"}`}>
                     <option value="nao">Preço Padrão</option>
-                    <option value="sim">🔥 Em Promoção</option>
+                    <option value="sim">🔥 Em Promoção / Liquidação</option>
                   </select>
                 </div>
               )}
@@ -600,7 +666,7 @@ export default function AdminPage() {
                 <tr className="border-b border-border/50 bg-secondary/10 text-[11px] font-bold text-muted-foreground uppercase tracking-widest">
                   <th className="p-4 w-20">Modelo</th>
                   <th className="p-4">Especificação Técnica</th>
-                  <th className="p-4 w-48">Matéria / Corte</th>
+                  <th className="p-4 w-48">Matéria / Vitrine</th>
                   <th className="p-4 w-48">Grades / Tamanhos</th>
                   <th className="p-4 text-center w-36">Ações</th>
                 </tr>
@@ -629,9 +695,9 @@ export default function AdminPage() {
                       </td>
                       <td className={`p-4 ${isAtivo ? "text-muted-foreground" : "text-muted-foreground/60"}`}>
                         <div className="font-semibold">{prod.tecido || "Não especificado"}</div>
-                        <div className="text-xs mt-0.5 flex gap-2 items-center mb-1.5">
-                          <span>{prod.categoria_tamanho || "Comum"}</span>
-                          {prod.em_promocao && <span className="text-[9px] bg-emerald-50 text-emerald-700 border border-emerald-200 px-1.5 py-0.2 rounded font-bold uppercase tracking-wider">Liquidação</span>}
+                        <div className="text-xs mt-0.5 flex flex-col gap-0.5 mb-1.5">
+                          <span className="text-primary font-bold">📂 {prod.categoria || "Sem Categoria"}</span>
+                          {prod.em_promocao && <span className="text-[9px] bg-emerald-50 text-emerald-700 border border-emerald-200 px-1.5 py-0.2 rounded font-bold uppercase tracking-wider w-fit mt-1">Liquidação</span>}
                         </div>
                       </td>
                       <td className="p-4">

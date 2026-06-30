@@ -1,10 +1,11 @@
 "use client";
 
-import { useEffect, useState } from "react";
-import { Search, ShoppingCart, User, Phone } from "lucide-react";
+import { useEffect, useState, useRef } from "react";
+import { Search, ShoppingCart, User, Phone, X } from "lucide-react";
 import Link from "next/link";
+import { useRouter } from "next/navigation";
 import { supabase } from "@/lib/supabase";
-import { useCarrinhoStore } from "@/store/carrinhoStore"; // 🔴 Importamos a Store!
+import { useCarrinhoStore } from "@/store/carrinhoStore";
 
 const IconeWhatsApp = ({ size = 24, className = "" }) => (
   <svg xmlns="http://www.w3.org/2000/svg" width={size} height={size} viewBox="0 0 24 24" fill="currentColor" className={className}>
@@ -19,22 +20,65 @@ const IconeInstagram = ({ size = 24, className = "" }) => (
 );
 
 export function PublicHeader() {
+  const router = useRouter();
   const [categorias, setCategorias] = useState<any[]>([]);
-  // 🔴 Puxamos a função de abrir o carrinho e a lista de itens direto da Store Global
+  const [produtos, setProdutos] = useState<any[]>([]);
+  const [termoBusca, setTermoBusca] = useState("");
+  const [buscaAtiva, setBuscaAtiva] = useState(false);
+  
   const { setAberto, itens } = useCarrinhoStore(); 
+  const buscaRef = useRef<HTMLDivElement>(null);
 
   const wppNumero = "5511961624287";
   const wppFormatado = "(11) 96162-4287";
   const instagramLink = "https://instagram.com/jordan.collectiion";
 
   useEffect(() => {
-    supabase.from("categorias").select("*").order("nome", { ascending: true }).then(({ data }) => {
-      if (data) setCategorias(data);
-    });
+    // Puxa as categorias visíveis
+    supabase.from("categorias")
+      .select("*")
+      .eq("mostrar_na_home", true) 
+      .order("ordem", { ascending: true })
+      .then(({ data }) => {
+        if (data) setCategorias(data);
+      });
+
+    // Puxa os produtos em background para a busca instantânea
+    supabase.from("produtos")
+      .select("id, nome, preco, imagens, tecido, categoria")
+      .eq("ativo", true)
+      .then(({ data }) => {
+        if (data) setProdutos(data);
+      });
+
+    // Fecha o menu de busca se clicar fora dele
+    const handleClickFora = (event: MouseEvent) => {
+      if (buscaRef.current && !buscaRef.current.contains(event.target as Node)) {
+        setBuscaAtiva(false);
+      }
+    };
+    document.addEventListener("mousedown", handleClickFora);
+    return () => document.removeEventListener("mousedown", handleClickFora);
   }, []);
 
-  // Calcula a quantidade total sempre que a variável `itens` mudar
   const qtdCarrinho = itens.reduce((acc, item) => acc + item.quantidade, 0);
+
+  const handleBuscar = (e: React.FormEvent) => {
+    e.preventDefault();
+    if (termoBusca.trim()) {
+      setBuscaAtiva(false);
+      router.push(`/?busca=${encodeURIComponent(termoBusca.trim())}`);
+    } else {
+      router.push(`/`);
+    }
+  };
+
+  // Lógica da Busca Instantânea (Kalie Style)
+  const produtosFiltrados = termoBusca.trim() === "" ? [] : produtos.filter(p => 
+    p.nome?.toLowerCase().includes(termoBusca.toLowerCase()) || 
+    p.categoria?.toLowerCase().includes(termoBusca.toLowerCase()) || 
+    p.tecido?.toLowerCase().includes(termoBusca.toLowerCase())
+  ).slice(0, 5); // Mostra no máximo 5 resultados na janelinha
 
   return (
     <>
@@ -56,13 +100,71 @@ export function PublicHeader() {
         <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8">
           <div className="flex flex-col md:flex-row items-center justify-between py-4 sm:py-5 gap-4">
             
-            <div className="w-full md:w-1/3 hidden md:flex justify-start">
-              <div className="relative w-full max-w-[280px]">
-                <input type="text" placeholder="Pesquisar peças..." className="w-full border border-border/80 bg-transparent rounded-md pl-3 pr-10 h-10 text-sm focus:outline-none focus:border-primary transition-colors" />
-                <Search className="absolute right-3 top-1/2 -translate-y-1/2 h-4 w-4 text-muted-foreground cursor-pointer" />
-              </div>
+            {/* BUSCA DESKTOP (Com Live Search) */}
+            <div className="w-full md:w-1/3 hidden md:flex justify-start relative" ref={buscaRef}>
+              <form onSubmit={handleBuscar} className="relative w-full max-w-[280px]">
+                <input 
+                  type="text" 
+                  value={termoBusca}
+                  onChange={(e) => {
+                    setTermoBusca(e.target.value);
+                    setBuscaAtiva(true);
+                  }}
+                  onFocus={() => setBuscaAtiva(true)}
+                  placeholder="Pesquisar peças, tecidos..." 
+                  className="w-full border border-border/80 bg-transparent rounded-md pl-3 pr-10 h-10 text-sm focus:outline-none focus:border-primary transition-colors" 
+                />
+                {termoBusca && (
+                  <button type="button" onClick={() => { setTermoBusca(""); setBuscaAtiva(false); }} className="absolute right-8 top-1/2 -translate-y-1/2 text-muted-foreground hover:text-foreground">
+                    <X className="h-3.5 w-3.5" />
+                  </button>
+                )}
+                <button type="submit" className="absolute right-3 top-1/2 -translate-y-1/2 text-muted-foreground hover:text-primary">
+                  <Search className="h-4 w-4 cursor-pointer" />
+                </button>
+              </form>
+
+              {/* DROPDOWN RESULTADOS (Estilo Kalie) */}
+              {buscaAtiva && termoBusca.length > 1 && (
+                <div className="absolute top-12 left-0 w-full max-w-[350px] bg-card border border-border shadow-2xl rounded-xl overflow-hidden z-50 animate-in fade-in slide-in-from-top-2 flex flex-col">
+                  {produtosFiltrados.length > 0 ? (
+                    <>
+                      <div className="px-4 py-2 bg-secondary/20 border-b border-border/50 text-[10px] font-bold uppercase tracking-widest text-muted-foreground">
+                        Resultados encontrados
+                      </div>
+                      <div className="max-h-80 overflow-y-auto divide-y divide-border/50">
+                        {produtosFiltrados.map(p => (
+                          <Link 
+                            href={`/produto/${p.id}`} 
+                            key={p.id}
+                            onClick={() => { setBuscaAtiva(false); setTermoBusca(""); }} 
+                            className="flex items-center gap-4 p-3 hover:bg-secondary/10 transition-colors group"
+                          >
+                            <div className="w-12 h-16 bg-muted rounded overflow-hidden shrink-0 border border-border/50">
+                              <img src={p.imagens?.[0]} alt={p.nome} className="w-full h-full object-cover group-hover:scale-105 transition-transform" />
+                            </div>
+                            <div className="flex flex-col">
+                              <span className="text-sm font-bold text-foreground font-serif leading-tight group-hover:text-primary transition-colors">{p.nome}</span>
+                              <span className="text-[10px] text-muted-foreground uppercase mt-0.5 tracking-wider">{p.tecido}</span>
+                              <span className="text-sm font-bold text-primary mt-1">R$ {Number(p.preco).toFixed(2).replace(".", ",")}</span>
+                            </div>
+                          </Link>
+                        ))}
+                      </div>
+                      <button onClick={handleBuscar} className="w-full py-3 bg-secondary/10 text-xs font-bold text-primary uppercase tracking-widest hover:bg-secondary/20 transition-colors border-t border-border/50">
+                        Ver todos os resultados
+                      </button>
+                    </>
+                  ) : (
+                    <div className="p-6 text-center text-sm text-muted-foreground">
+                      Nenhuma peça encontrada para "{termoBusca}".
+                    </div>
+                  )}
+                </div>
+              )}
             </div>
 
+            {/* LOGO */}
             <div className="w-full md:w-1/3 flex justify-between md:justify-center items-center">
               <Link href="/" className="flex items-center gap-2 group">
                 <div className="bg-primary text-secondary p-2 rounded-lg font-serif font-bold text-xl leading-none shadow-sm group-hover:bg-primary/90 transition-colors">JC</div>
@@ -70,7 +172,6 @@ export function PublicHeader() {
               </Link>
               <div className="flex md:hidden items-center gap-4">
                 <Link href="/admin" className="text-foreground hover:text-primary"><User size={22} /></Link>
-                {/* 🔴 Botão do Mobile agora abre o Carrinho */}
                 <button onClick={() => setAberto(true)} className="relative text-foreground hover:text-primary">
                   <ShoppingCart size={22} />
                   <span className="absolute -top-1.5 -right-1.5 bg-[#111] text-white text-[9px] font-bold h-4 w-4 rounded-full flex items-center justify-center">{qtdCarrinho}</span>
@@ -78,20 +179,64 @@ export function PublicHeader() {
               </div>
             </div>
 
+            {/* ÍCONES DIREITA */}
             <div className="w-full md:w-1/3 hidden md:flex justify-end items-center gap-6 text-sm font-medium">
               <Link href="/admin" className="flex items-center gap-2 text-foreground hover:text-primary transition-colors border-r border-border/60 pr-6"><User size={20} /> Área Restrita</Link>
-              {/* 🔴 Botão do Desktop agora abre o Carrinho */}
               <button onClick={() => setAberto(true)} className="flex items-center text-foreground hover:text-primary transition-colors relative">
                 <ShoppingCart size={26} />
                 <span className="absolute -top-1.5 -right-2 bg-[#111] text-white text-[10px] font-bold h-4 w-4 rounded-full flex items-center justify-center shadow-sm">{qtdCarrinho}</span>
               </button>
             </div>
 
-            <div className="w-full md:hidden flex justify-center mt-2">
-              <div className="relative w-full">
-                <input type="text" placeholder="Pesquisar peças..." className="w-full border border-border/80 bg-secondary/20 rounded-md pl-3 pr-10 h-10 text-sm focus:outline-none" />
-                <Search className="absolute right-3 top-1/2 -translate-y-1/2 h-4 w-4 text-muted-foreground" />
-              </div>
+            {/* BUSCA MOBILE */}
+            <div className="w-full md:hidden flex justify-center mt-2 relative">
+              <form onSubmit={handleBuscar} className="relative w-full">
+                <input 
+                  type="text" 
+                  value={termoBusca}
+                  onChange={(e) => {
+                    setTermoBusca(e.target.value);
+                    setBuscaAtiva(true);
+                  }}
+                  onFocus={() => setBuscaAtiva(true)}
+                  placeholder="Pesquisar peças..." 
+                  className="w-full border border-border/80 bg-secondary/20 rounded-md pl-3 pr-10 h-10 text-sm focus:outline-none focus:border-primary" 
+                />
+                <button type="submit" className="absolute right-3 top-1/2 -translate-y-1/2 text-muted-foreground hover:text-primary">
+                  <Search className="h-4 w-4" />
+                </button>
+              </form>
+
+              {/* DROPDOWN MOBILE */}
+              {buscaAtiva && termoBusca.length > 1 && (
+                <div className="absolute top-12 left-0 w-full bg-card border border-border shadow-xl rounded-lg overflow-hidden z-50 flex flex-col">
+                  {produtosFiltrados.length > 0 ? (
+                    <>
+                      <div className="max-h-60 overflow-y-auto divide-y divide-border/50">
+                        {produtosFiltrados.map(p => (
+                          <Link 
+                            href={`/produto/${p.id}`} 
+                            key={p.id}
+                            onClick={() => { setBuscaAtiva(false); setTermoBusca(""); }} 
+                            className="flex items-center gap-3 p-3 hover:bg-secondary/10"
+                          >
+                            <img src={p.imagens?.[0]} alt={p.nome} className="w-10 h-12 object-cover rounded border border-border/50" />
+                            <div className="flex flex-col">
+                              <span className="text-xs font-bold text-foreground font-serif">{p.nome}</span>
+                              <span className="text-[10px] font-bold text-primary mt-0.5">R$ {Number(p.preco).toFixed(2).replace(".", ",")}</span>
+                            </div>
+                          </Link>
+                        ))}
+                      </div>
+                      <button onClick={handleBuscar} className="w-full py-3 bg-secondary/10 text-[10px] font-bold text-primary uppercase tracking-widest border-t border-border/50">
+                        Ver todos os resultados
+                      </button>
+                    </>
+                  ) : (
+                    <div className="p-4 text-center text-xs text-muted-foreground">Nenhuma peça encontrada.</div>
+                  )}
+                </div>
+              )}
             </div>
           </div>
         </div>
@@ -99,7 +244,6 @@ export function PublicHeader() {
         <div className="bg-card hidden sm:block">
           <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8">
             <div className="flex overflow-x-auto hide-scrollbar md:justify-center gap-6 sm:gap-10 py-4 text-[10px] sm:text-[11px] font-bold uppercase tracking-widest text-foreground/80 border-t border-border/40">
-              <Link href="/#Novidades" className="whitespace-nowrap hover:text-primary transition-colors">Novidades</Link>
               {categorias.map(cat => <Link key={cat.id} href={`/#${cat.nome}`} className="whitespace-nowrap hover:text-primary transition-colors">{cat.nome}</Link>)}
             </div>
           </div>

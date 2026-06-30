@@ -3,7 +3,7 @@
 import { useEffect, useState } from "react";
 import { supabase } from "@/lib/supabase";
 import { useRouter, usePathname } from "next/navigation";
-import { LogOut, User, Store, Package, ShoppingBag, LayoutDashboard } from "lucide-react";
+import { LogOut, User, Store, Package, ShoppingBag, LayoutDashboard, LayoutTemplate } from "lucide-react"; // 🔴 Importei o LayoutTemplate
 import Link from "next/link";
 
 export function Navbar() {
@@ -14,14 +14,12 @@ export function Navbar() {
 
   useEffect(() => {
     async function carregarUsuario() {
-      // 1. Tenta ler primeiro do Cache Local (Instantâneo)
       const cacheUser = sessionStorage.getItem("jc_user_meta");
       if (cacheUser) {
         setUsuario(JSON.parse(cacheUser));
-        return; // Mata a função aqui, sem carregar a internet
+        return;
       }
 
-      // 2. Se não tiver no cache (primeiro acesso), busca no Supabase
       const { data: { user } } = await supabase.auth.getUser();
       if (user) {
         const dadosUsuario = {
@@ -30,7 +28,6 @@ export function Navbar() {
           email: user.email || ""
         };
         
-        // Salva no cache para as próximas páginas lerem instantaneamente
         sessionStorage.setItem("jc_user_meta", JSON.stringify(dadosUsuario));
         setUsuario(dadosUsuario);
       }
@@ -39,7 +36,6 @@ export function Navbar() {
   }, []);
 
   const handleSair = async () => {
-    // Limpa o cache ao sair do sistema
     sessionStorage.removeItem("jc_user_meta");
     await supabase.auth.signOut();
     window.location.href = "/login";
@@ -63,7 +59,7 @@ export function Navbar() {
           {/* CENTRO: O COCKPIT DE NAVEGAÇÃO INTERNA */}
           <div className="flex items-center bg-secondary/30 p-1 rounded-xl border border-border/40 overflow-x-auto hide-scrollbar">
             
-            {/* 1. VISÃO GERAL (DASHBOARD) */}
+            {/* 1. VISÃO GERAL */}
             <Link 
               href="/admin" 
               className={`flex items-center gap-1.5 sm:gap-2 px-3 sm:px-4 py-2 rounded-lg text-[10px] sm:text-xs font-bold uppercase tracking-wider transition-all whitespace-nowrap ${
@@ -76,11 +72,11 @@ export function Navbar() {
               <span className="hidden sm:inline">Visão Geral</span>
             </Link>
 
-            {/* 2. CATÁLOGO DE PRODUTOS */}
+            {/* 2. CATÁLOGO */}
             <Link 
               href="/admin/produtos" 
               className={`flex items-center gap-1.5 sm:gap-2 px-3 sm:px-4 py-2 rounded-lg text-[10px] sm:text-xs font-bold uppercase tracking-wider transition-all whitespace-nowrap ${
-                pathname.startsWith("/admin/produtos") 
+                pathname === "/admin/produtos" 
                   ? "bg-card text-primary shadow-sm border border-border/50" 
                   : "text-muted-foreground hover:text-foreground"
               }`}
@@ -89,11 +85,24 @@ export function Navbar() {
               <span className="hidden sm:inline">Catálogo</span>
             </Link>
 
-            {/* 3. GESTÃO DE PEDIDOS */}
+            {/* 🔴 3. VITRINE (NOVA) */}
+            <Link 
+              href="/admin/vitrine" 
+              className={`flex items-center gap-1.5 sm:gap-2 px-3 sm:px-4 py-2 rounded-lg text-[10px] sm:text-xs font-bold uppercase tracking-wider transition-all whitespace-nowrap ${
+                pathname === "/admin/vitrine" 
+                  ? "bg-card text-primary shadow-sm border border-border/50" 
+                  : "text-muted-foreground hover:text-foreground"
+              }`}
+            >
+              <LayoutTemplate className="h-3.5 w-3.5" />
+              <span className="hidden sm:inline">Vitrine</span>
+            </Link>
+
+            {/* 4. PEDIDOS */}
             <Link 
               href="/admin/pedidos" 
               className={`flex items-center gap-1.5 sm:gap-2 px-3 sm:px-4 py-2 rounded-lg text-[10px] sm:text-xs font-bold uppercase tracking-wider transition-all whitespace-nowrap ${
-                pathname.startsWith("/admin/pedidos") 
+                pathname === "/admin/pedidos" 
                   ? "bg-card text-primary shadow-sm border border-border/50" 
                   : "text-muted-foreground hover:text-foreground"
               }`}
@@ -103,7 +112,7 @@ export function Navbar() {
             </Link>
           </div>
 
-          {/* LADO DIREITO: Info do Usuário e Botão de Sair */}
+          {/* LADO DIREITO */}
           {usuario ? (
             <div className="flex items-center gap-2 sm:gap-6 flex-shrink-0">
               <div className="hidden lg:flex flex-col items-end justify-center">
