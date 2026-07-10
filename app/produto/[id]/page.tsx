@@ -4,7 +4,7 @@ import { useEffect, useState } from "react";
 import { supabase } from "@/lib/supabase";
 import { useParams, useRouter } from "next/navigation";
 import Link from "next/link";
-import { Loader2, ChevronLeft, ChevronRight, ShoppingCart, Download, Plus, Minus, ArrowLeft, MessageCircle, Camera, CheckCircle2 } from "lucide-react";
+import { Loader2, ChevronLeft, ChevronRight, ShoppingCart, Download, Plus, Minus, ArrowLeft, MessageCircle, Camera, CheckCircle2, Package } from "lucide-react";
 import { PublicHeader } from "@/components/PublicHeader";
 import { PublicFooter } from "@/components/PublicFooter";
 import { useCarrinhoStore } from "@/store/carrinhoStore";
@@ -13,19 +13,17 @@ export default function ProdutoPage() {
   const params = useParams();
   const router = useRouter();
   
-  // 🔴 PUXAMOS A FUNÇÃO CORRETA DA STORE
   const { adicionarAoCarrinho } = useCarrinhoStore();
 
   const [produto, setProduto] = useState<any | null>(null);
   const [coresBanco, setCoresBanco] = useState<any[]>([]);
   const [carregando, setCarregando] = useState(true);
 
-  // Estados de Interação do Carrossel e Cor Ativa
   const [fotoAtualIndex, setFotoAtualIndex] = useState(0);
   const [corAtiva, setCorAtiva] = useState<string>("");
   const [qtdMinima, setQtdMinima] = useState<number>(1);
+  const [abaAtiva, setAbaAtiva] = useState<"detalhes" | "fardo">("detalhes");
 
-  // MATRIZ DE SELEÇÃO: Guarda a quantidade de cada tamanho por cor
   const [selecoes, setSelecoes] = useState<Record<string, Record<string, number>>>({});
 
   useEffect(() => {
@@ -44,7 +42,7 @@ export default function ProdutoPage() {
       const min = resProd.data.qtd_minima > 0 ? resProd.data.qtd_minima : 1;
       setQtdMinima(min);
       if (resProd.data.cores && resProd.data.cores.length > 0) {
-        setCorAtiva(resProd.data.cores[0]); // Seleciona a primeira cor por padrão
+        setCorAtiva(resProd.data.cores[0]); 
       }
     }
     if (resCor.data) setCoresBanco(resCor.data);
@@ -54,7 +52,6 @@ export default function ProdutoPage() {
   const fotoAnterior = () => setFotoAtualIndex(prev => prev === 0 ? produto.imagens.length - 1 : prev - 1);
   const fotoProxima = () => setFotoAtualIndex(prev => prev === produto.imagens.length - 1 ? 0 : prev + 1);
 
-  // Lógica da matriz de controle de quantidade por tamanho
   const alterarQtd = (tamanho: string, delta: number) => {
     setSelecoes(prev => {
       const atual = prev[corAtiva]?.[tamanho] || 0;
@@ -82,7 +79,6 @@ export default function ProdutoPage() {
 
     const itensParaAdicionar: any[] = [];
 
-    // Lemos a matriz e criamos um item individual para cada combinação
     Object.keys(selecoes).forEach(cor => {
       Object.keys(selecoes[cor]).forEach(tamanho => {
         const qtd = selecoes[cor][tamanho];
@@ -101,10 +97,7 @@ export default function ProdutoPage() {
       });
     });
 
-    // Envia o lote de produtos completo para a Store (que vai abrir a gaveta sozinha)
     adicionarAoCarrinho(itensParaAdicionar);
-
-    // Limpa a matriz visual para a cliente poder fazer um novo lote
     setSelecoes({});
   };
 
@@ -115,7 +108,6 @@ export default function ProdutoPage() {
 
   return (
     <div className="min-h-screen bg-background font-sans flex flex-col">
-      {/* 🔴 HEADER GLOBAL INJETADO AQUI */}
       <PublicHeader />
 
       <main className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 pt-8 md:pt-12 flex-1 w-full pb-20">
@@ -164,26 +156,61 @@ export default function ProdutoPage() {
             </div>
           </div>
 
-          {/* ÁREA DE SELEÇÃO E INFORMAÇÕES */}
+          {/* DADOS DE SELEÇÃO */}
           <div className="flex flex-col pt-2">
-            <div className="border-b border-border/50 pb-6 mb-6">
+            <div className="border-b border-border/50 pb-5 mb-5">
               <div className="flex gap-2 mb-4">
                 <span className="text-[10px] font-bold uppercase tracking-widest bg-secondary text-muted-foreground px-2.5 py-1 rounded">{produto.tecido}</span>
                 <span className="text-[10px] font-bold uppercase tracking-widest bg-secondary/50 text-muted-foreground border border-border/50 px-2.5 py-1 rounded">{produto.categoria_tamanho}</span>
               </div>
-              <h1 className="text-3xl sm:text-4xl font-bold font-serif text-foreground leading-tight mb-3">
+              <h1 className="text-3xl sm:text-4xl font-bold font-serif text-foreground tracking-tight mb-2">
                 {produto.nome}
               </h1>
-              <p className="text-4xl text-primary font-bold font-serif">
+              <p className="text-4xl text-primary font-bold font-serif mb-4">
                 R$ {Number(produto.preco).toFixed(2).replace(".", ",")}
               </p>
+
+              {/* 🔴 LINK DO DRIVE: COM A COR DA MARCA (PRIMÁRIA) */}
+              {produto.link_drive && (
+                <div className="mt-4 bg-primary rounded-xl p-4 flex flex-col sm:flex-row items-start sm:items-center justify-between gap-4 shadow-md">
+                  <div className="space-y-1">
+                    <div className="flex items-center gap-1.5 text-xs font-bold uppercase tracking-wider text-primary-foreground">
+                      <Download size={14} className="opacity-80" /> Material de Apoio
+                    </div>
+                    <p className="text-[11px] text-primary-foreground/80 font-medium leading-relaxed">
+                      Baixe fotos reais do lote para antecipar suas vendas.
+                    </p>
+                  </div>
+                  <a 
+                    href={produto.link_drive} 
+                    target="_blank" 
+                    rel="noreferrer" 
+                    className="bg-background text-primary hover:bg-secondary border border-border/10 font-bold uppercase tracking-widest text-[10px] px-4 py-2.5 rounded-lg shadow-sm transition-all shrink-0 flex items-center gap-2 hover:scale-105"
+                  >
+                    Acessar Drive
+                  </a>
+                </div>
+              )}
             </div>
 
             <div className="space-y-6 flex-1">
-              {/* Variações de Cores */}
+              {/* Cores */}
               {produto.cores && produto.cores.length > 0 && (
                 <div>
-                  <p className="text-xs font-bold uppercase tracking-widest text-foreground mb-3">1. Navegue pelas Cores</p>
+                  <div className="flex items-center justify-between mb-3">
+                    <p className="text-xs font-bold uppercase tracking-widest text-foreground">1. Escolha a Cor</p>
+                    
+                    {/* Botão de Alternância para fotos do fardo */}
+                    {produto.foto_fardo && (
+                      <button 
+                        onClick={() => setAbaAtiva(abaAtiva === "detalhes" ? "fardo" : "detalhes")}
+                        className="text-[10px] font-bold uppercase tracking-wider text-primary flex items-center gap-1 border border-primary/20 bg-primary/5 rounded-md px-2 py-1 hover:bg-primary/10 transition-all"
+                      >
+                        <Camera size={12} /> {abaAtiva === "detalhes" ? "Ver Foto do Fardo" : "Ver Modelo"}
+                      </button>
+                    )}
+                  </div>
+
                   <div className="flex gap-3 flex-wrap">
                     {produto.cores.map((nomeCor: string) => {
                       const corRef = coresBanco.find(c => c.nome === nomeCor);
@@ -194,7 +221,7 @@ export default function ProdutoPage() {
                           {qtdDestaCor > 0 && (
                             <span className="absolute -top-2 -right-2 bg-emerald-600 text-white text-[10px] font-bold h-5 w-5 rounded-full flex items-center justify-center shadow-md animate-in zoom-in-50">{qtdDestaCor}</span>
                           )}
-                          <button onClick={() => setCorAtiva(nomeCor)} className={`flex items-center gap-2 rounded-full px-4 py-2 shadow-sm transition-all border-2 ${isAtiva ? 'border-primary bg-primary/5 scale-105' : 'border-border/60 bg-card hover:border-primary/40'}`}>
+                          <button onClick={() => { setCorAtiva(nomeCor); setAbaAtiva("detalhes"); }} className={`flex items-center gap-2 rounded-full px-4 py-2 shadow-sm transition-all border-2 ${isAtiva ? 'border-primary bg-primary/5 scale-105' : 'border-border/60 bg-card hover:border-primary/40'}`}>
                             <div className="w-5 h-5 rounded-full border border-black/10 shadow-inner" style={{ backgroundColor: corRef ? corRef.hex : '#ccc' }} />
                             <span className={`text-xs font-bold ${isAtiva ? 'text-primary' : 'text-foreground/80'}`}>{nomeCor}</span>
                           </button>
@@ -202,6 +229,32 @@ export default function ProdutoPage() {
                       );
                     })}
                   </div>
+                </div>
+              )}
+
+              {/* SESSÃO: PREVISUALIZAÇÃO DA FOTO DO FARDO REAL (MAIS OBJETIVA) */}
+              {abaAtiva === "fardo" && produto.foto_fardo ? (
+                <div className="border border-border/80 rounded-xl p-3 bg-card space-y-2 animate-in zoom-in-95 shadow-sm">
+                  <div className="flex items-center justify-between">
+                    <div className="flex items-center gap-2 text-xs font-bold uppercase tracking-wider text-foreground">
+                      <Package size={14} className="text-primary"/> Cores Reais do Fardo
+                    </div>
+                    <button onClick={() => setAbaAtiva("detalhes")} className="text-[10px] font-bold text-muted-foreground hover:text-primary transition-colors">Fechar</button>
+                  </div>
+                  <div className="w-full aspect-[4/3] rounded-lg overflow-hidden border border-border/50 bg-secondary/10">
+                    <img src={produto.foto_fardo} alt="Foto real das cores no fardo" className="w-full h-full object-cover" />
+                  </div>
+                  <p className="text-[10px] text-muted-foreground text-center font-medium">
+                    Foto de fábrica sem edição. Tons exatos da mercadoria.
+                  </p>
+                </div>
+              ) : (
+                /* Card estático para lembrar o cliente que você garante tons reais */
+                <div className="border border-border/60 bg-secondary/10 rounded-xl p-3 flex items-center justify-between">
+                  <span className="text-[10px] font-bold uppercase tracking-wider text-muted-foreground flex items-center gap-2">
+                    <Camera size={14} className="text-foreground" /> Cor real do fardo
+                  </span>
+
                 </div>
               )}
 
@@ -231,7 +284,7 @@ export default function ProdutoPage() {
               )}
             </div>
 
-            {/* CAIXA DE COMPRA */}
+            {/* BOX DE PREÇO FINAL */}
             <div className="mt-8 bg-secondary/10 p-6 md:p-8 rounded-2xl border border-border/50 shadow-sm">
               <div className="flex justify-between items-end border-b border-border/50 pb-5 mb-5">
                 <span className="text-xs font-bold uppercase tracking-widest text-muted-foreground flex flex-col gap-1">
@@ -258,7 +311,7 @@ export default function ProdutoPage() {
               <ul className="space-y-3 text-xs text-emerald-900/80 font-medium">
                 <li className="flex items-start gap-2.5">
                   <span className="bg-emerald-200 text-emerald-800 rounded-full w-4 h-4 flex items-center justify-center shrink-0 text-[9px] font-bold mt-0.5">1</span>
-                  <span className="leading-snug">Monte seu pedido selecionando as variações e adicione à sacola.</span>
+                  <span className="leading-snug">Monte seu lote selecionando as variações e adicione à sacola.</span>
                 </li>
                 <li className="flex items-start gap-2.5">
                   <span className="bg-emerald-200 text-emerald-800 rounded-full w-4 h-4 flex items-center justify-center shrink-0 text-[9px] font-bold mt-0.5">2</span>
@@ -271,27 +324,8 @@ export default function ProdutoPage() {
               </ul>
             </div>
 
-            {/* MATERIAL DE APOIO E DESCRIÇÃO */}
-            <div className="mt-8 space-y-6 pt-2">
-              
-              {produto.link_drive && (
-                <div className="bg-gradient-to-br from-blue-50 to-indigo-50/50 border border-blue-200/60 rounded-2xl p-6 shadow-sm relative overflow-hidden">
-                  <div className="absolute -right-4 -top-4 bg-blue-500/10 w-24 h-24 rounded-full blur-2xl"></div>
-                  
-                  <h3 className="text-sm font-bold uppercase tracking-widest text-blue-900 mb-2 flex items-center gap-2">
-                    <Camera size={18} className="text-blue-600" /> Material Exclusivo
-                  </h3>
-                  
-                  <p className="text-xs text-blue-800/80 mb-5 leading-relaxed max-w-[90%]">
-                    <strong>Venda antes mesmo da mercadoria chegar!</strong> Acesse nossa pasta com fotos de estúdio em alta resolução, prontas para postar no seu Instagram.
-                  </p>
-                  
-                  <a href={produto.link_drive} target="_blank" rel="noreferrer" className="inline-flex items-center gap-2 text-xs font-bold uppercase tracking-widest text-white bg-blue-600 hover:bg-blue-700 shadow-md px-5 py-3.5 rounded-xl transition-all hover:scale-[1.02] w-full sm:w-auto justify-center">
-                    <Download size={16} /> Acessar Google Drive
-                  </a>
-                </div>
-              )}
-
+            {/* DESCRIÇÃO DA PEÇA */}
+            <div className="mt-6">
               {produto.descricao && (
                 <div className="bg-card border border-border/50 p-6 rounded-2xl shadow-sm">
                   <h3 className="text-xs font-bold uppercase tracking-widest text-foreground mb-3 flex items-center gap-2">
@@ -302,14 +336,11 @@ export default function ProdutoPage() {
                   </div>
                 </div>
               )}
-
             </div>
-          </div>
 
+          </div>
         </div>
       </main>
-      
-      {/* 🔴 FOOTER GLOBAL INJETADO AQUI */}
       <PublicFooter />
     </div>
   );
