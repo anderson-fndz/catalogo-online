@@ -4,7 +4,7 @@ import { useState, useEffect } from "react";
 import { supabase } from "@/lib/supabase";
 import { Navbar } from "@/components/Navbar";
 import { useRouter } from "next/navigation";
-import { Loader2, Users, ShoppingBag, Filter, MessageCircle, Plus, MapPin, Calendar, Scissors, X, Edit, Trash2, BusFront } from "lucide-react";
+import { Loader2, Users, ShoppingBag, Filter, MessageCircle, Plus, MapPin, Calendar, Scissors, X, Edit, Trash2, BusFront, Minus } from "lucide-react";
 import { format, differenceInDays } from "date-fns";
 import { ptBR } from "date-fns/locale";
 
@@ -27,14 +27,14 @@ export default function PedidosECrmPage() {
   const [novoNome, setNovoNome] = useState("");
   const [novoZap, setNovoZap] = useState("");
   const [novoEstado, setNovoEstado] = useState("");
-  const [novoNomePacote, setNovoNomePacote] = useState(""); // NOVO CAMPO
+  const [novoNomePacote, setNovoNomePacote] = useState(""); 
   const [dataVendaManual, setDataVendaManual] = useState(new Date().toISOString().split('T')[0]);
 
-  // Mini-carrinho interno do Modal
+  // Mini-carrinho interno do Modal (Agilizado com Grade)
   const [itensLancamento, setItensLancamento] = useState<any[]>([]);
   const [prodSelecionado, setProdSelecionado] = useState("");
-  const [corComprada, setCorComprada] = useState("");
-  const [qtdComprada, setQtdComprada] = useState(1);
+  const [corAtiva, setCorAtiva] = useState("");
+  const [selecoesGrade, setSelecoesGrade] = useState<Record<string, Record<string, number>>>({});
 
   // Estados dos Filtros do CRM
   const [filtroEstado, setFiltroEstado] = useState("");
@@ -50,14 +50,13 @@ export default function PedidosECrmPage() {
     setCarregando(true);
     
     const [resPedidos, resClientes, resProdutos, resHistorico] = await Promise.all([
-      // 1. Puxa a fila de pedidos reais da loja
       supabase.from("pedidos").select("*").order("created_at", { ascending: false }),
-      // 2. Puxa Clientes e Produtos
       supabase.from("clientes").select("*").order("nome", { ascending: true }),
-      supabase.from("produtos").select("id, nome, tecido, cores").order("nome", { ascending: true }),
-      // 3. Puxa o CRM
+      // BUSCANDO GRADE_TAMANHOS AGORA
+      supabase.from("produtos").select("id, nome, tecido, cores, grade_tamanhos").order("nome", { ascending: true }),
+      // BUSCANDO TAMANHO NO HISTORICO
       supabase.from("historico_compras").select(`
-        id, cor, quantidade, data_compra,
+        id, cor, tamanho, quantidade, data_compra,
         cliente:clientes(id, nome, whatsapp, estado, nome_pacote),
         produto:produtos(id, nome, tecido)
       `).order("data_compra", { ascending: false })
@@ -71,22 +70,54 @@ export default function PedidosECrmPage() {
     setCarregando(false);
   }
 
-  // --- LÓGICA DO MINI CARRINHO DO MODAL ---
-  const adicionarItemAoLancamento = () => {
-    if (!prodSelecionado || !corComprada || qtdComprada < 1) return alert("Preencha o produto, cor e quantidade.");
-    
+  // --- LÓGICA DA NOVA GRADE ÁGIL NO MODAL ---
+  const handleChangeProduto = (id: string) => {
+    setProdSelecionado(id);
+    setCorAtiva("");
+    setSelecoesGrade({});
+  };
+
+  const alterarQtdGrade = (tamanho: string, delta: number) => {
+    setSelecoesGrade(prev => {
+      const atual = prev[corAtiva]?.[tamanho] || 0;
+      const nova = Math.max(0, atual + delta);
+      return { ...prev, [corAtiva]: { ...(prev[corAtiva] || {}), [tamanho]: nova } };
+    });
+  };
+
+  const getSubtotalModelo = () => {
+    return Object.values(selecoesGrade).reduce((acc, obj) => acc + Object.values(obj).reduce((a, b) => a + b, 0), 0);
+  };
+
+  const adicionarGradeAoLancamento = () => {
+    const totalPecas = getSubtotalModelo();
+    if (totalPecas === 0) return alert("Selecione a quantidade de peças na grade.");
+
     const prodRef = produtos.find(p => p.id.toString() === prodSelecionado);
-    setItensLancamento([...itensLancamento, { 
-      idTemp: Date.now(), 
-      produto_id: prodRef.id, 
-      nome: prodRef.nome, 
-      tecido: prodRef.tecido, 
-      cor: corComprada, 
-      quantidade: qtdComprada 
-    }]);
-    
-    // Reseta pra próxima peça
-    setProdSelecionado(""); setCorComprada(""); setQtdComprada(1);
+    const novosItens: any[] = [];
+
+    Object.keys(selecoesGrade).forEach(cor => {
+      Object.keys(selecoesGrade[cor]).forEach(tam => {
+        const qtd = selecoesGrade[cor][tam];
+        if (qtd > 0) {
+          novosItens.push({
+            idTemp: Date.now() + Math.random(),
+            produto_id: prodRef.id,
+            nome: prodRef.nome,
+            tecido: prodRef.tecido,
+            cor: cor,
+            tamanho: tam,
+            quantidade: qtd
+          });
+        }
+      });
+    });
+
+    setItensLancamento([...itensLancamento, ...novosItens]);
+    // Reseta para o usuário escolher o próximo modelo
+    setProdSelecionado("");
+    setCorAtiva("");
+    setSelecoesGrade({});
   };
 
   const removerItemDoLancamento = (idTemp: number) => {
@@ -118,12 +149,12 @@ export default function PedidosECrmPage() {
         if (!idDoCliente) throw new Error("Selecione um cliente.");
       }
 
-      // Monta o array com todas as peças para inserir de uma vez
       const dataFormatada = dataVendaManual ? `${dataVendaManual}T12:00:00Z` : undefined;
       const insercoes = itensLancamento.map(item => ({
         cliente_id: idDoCliente,
         produto_id: item.produto_id,
         cor: item.cor,
+        tamanho: item.tamanho, // Salvando o tamanho!
         quantidade: item.quantidade,
         data_compra: dataFormatada
       }));
@@ -131,8 +162,8 @@ export default function PedidosECrmPage() {
       const { error: errHist } = await supabase.from("historico_compras").insert(insercoes);
       if (errHist) throw errHist;
 
-      // Limpa e fecha o modal
-      setNovoNome(""); setNovoZap(""); setNovoEstado(""); setNovoNomePacote(""); setItensLancamento([]);
+      setNovoNome(""); setNovoZap(""); setNovoEstado(""); setNovoNomePacote(""); 
+      setItensLancamento([]); setSelecoesGrade({}); setProdSelecionado(""); setCorAtiva("");
       setIsModalAberto(false);
       alert("Histórico registrado com sucesso!");
       carregarDadosBase();
@@ -168,7 +199,7 @@ export default function PedidosECrmPage() {
 
   if (carregando) return <div className="min-h-screen bg-background flex flex-col items-center justify-center gap-4"><Loader2 className="h-8 w-8 animate-spin text-primary" /><p className="text-sm font-serif text-muted-foreground animate-pulse">Carregando painel...</p></div>;
 
-  const coresDisponiveisForm = produtos.find(p => p.id.toString() === prodSelecionado)?.cores || [];
+  const produtoSendoAdicionado = produtos.find(p => p.id.toString() === prodSelecionado);
   const tecidosUnicos = Array.from(new Set(produtos.map(p => p.tecido).filter(Boolean)));
   const estadosUnicos = Array.from(new Set(clientes.map(c => c.estado).filter(Boolean)));
   const meses = ["1","2","3","4","5","6","7","8","9","10","11","12"];
@@ -340,9 +371,10 @@ export default function PedidosECrmPage() {
                           </td>
                           <td className="p-4">
                             <div className="font-bold text-sm line-clamp-1">{item.produto?.nome || 'Produto Excluído'}</div>
-                            <div className="flex gap-2 mt-1">
+                            <div className="flex gap-2 mt-1 flex-wrap">
                               <span className="text-[9px] text-primary uppercase tracking-widest font-bold">{item.produto?.tecido}</span>
                               <span className="text-[9px] text-muted-foreground uppercase tracking-widest font-bold border-l border-border pl-2">Cor: {item.cor}</span>
+                              {item.tamanho && <span className="text-[9px] text-muted-foreground uppercase tracking-widest font-bold border-l border-border pl-2">Tam: {item.tamanho}</span>}
                               <span className="text-[9px] text-muted-foreground uppercase tracking-widest font-bold border-l border-border pl-2">Qtd: {item.quantidade}</span>
                             </div>
                           </td>
@@ -378,9 +410,9 @@ export default function PedidosECrmPage() {
       {/* ========================================= */}
       {isModalAberto && (
         <div className="fixed inset-0 bg-black/60 z-50 flex items-center justify-center p-4 backdrop-blur-sm animate-in fade-in">
-          <div className="bg-background border border-border rounded-2xl shadow-2xl w-full max-w-3xl max-h-[90vh] flex flex-col overflow-hidden">
+          <div className="bg-background border border-border rounded-2xl shadow-2xl w-full max-w-4xl max-h-[90vh] flex flex-col overflow-hidden">
             
-            <div className="px-6 py-4 border-b border-border/50 bg-secondary/20 flex justify-between items-center">
+            <div className="px-6 py-4 border-b border-border/50 bg-secondary/20 flex justify-between items-center shrink-0">
               <div>
                 <h3 className="text-lg font-bold uppercase tracking-widest text-foreground flex items-center gap-2">
                   <Plus size={18} className="text-primary"/> Registrar Histórico (Atacado)
@@ -390,9 +422,9 @@ export default function PedidosECrmPage() {
               <button onClick={() => setIsModalAberto(false)} className="text-muted-foreground hover:bg-secondary p-2 rounded-lg transition-colors"><X size={20}/></button>
             </div>
 
-            <div className="p-6 overflow-y-auto space-y-8">
+            <div className="p-6 overflow-y-auto space-y-8 flex-1">
               
-              {/* BLOCO 1: CLIENTE E DATA */}
+              {/* BLOCO 1: DADOS DO CLIENTE */}
               <div className="space-y-4">
                 <div className="flex gap-4 mb-2">
                   <label className="flex items-center gap-2 text-xs font-bold uppercase tracking-wider cursor-pointer">
@@ -412,9 +444,8 @@ export default function PedidosECrmPage() {
                   ) : (
                     <>
                       <input type="text" placeholder="Nome da Loja/Cliente *" value={novoNome} onChange={e => setNovoNome(e.target.value)} className="w-full border border-border/80 rounded-lg px-3 h-10 text-sm bg-card focus:outline-none focus:border-primary" />
-                      <input type="text" placeholder="WhatsApp *" value={novoZap} onChange={e => setNovoZap(e.target.value)} className="w-full border border-border/80 rounded-lg px-3 h-10 text-sm bg-card focus:outline-none focus:border-primary" />
+                      <input type="text" placeholder="WhatsApp (Apenas números) *" value={novoZap} onChange={e => setNovoZap(e.target.value)} className="w-full border border-border/80 rounded-lg px-3 h-10 text-sm bg-card focus:outline-none focus:border-primary" />
                       
-                      {/* Grid interno para os campos complementares */}
                       <div className="grid grid-cols-3 gap-2 col-span-1 md:col-span-2">
                         <input type="text" placeholder="UF (Ex: SP) *" value={novoEstado} onChange={e => setNovoEstado(e.target.value)} className="col-span-1 border border-border/80 rounded-lg px-3 h-10 text-sm bg-card focus:outline-none focus:border-primary uppercase" maxLength={2} />
                         <input type="text" placeholder="Nome no Pacote (Opcional - Excursão)" value={novoNomePacote} onChange={e => setNovoNomePacote(e.target.value)} className="col-span-2 border border-border/80 rounded-lg px-3 h-10 text-sm bg-card focus:outline-none focus:border-primary" />
@@ -429,42 +460,79 @@ export default function PedidosECrmPage() {
                 </div>
               </div>
 
-              {/* BLOCO 2: MINI CARRINHO */}
-              <div className="bg-secondary/10 border border-border/60 rounded-xl p-5">
+              {/* BLOCO 2: GRADE ÁGIL DO PRODUTO */}
+              <div className="bg-secondary/10 border border-border/60 rounded-xl p-5 shadow-inner">
                 <h4 className="text-xs font-bold uppercase tracking-widest text-foreground mb-4">Adicionar Peças à Nota</h4>
                 
-                <div className="flex flex-col md:flex-row gap-3 items-end">
-                  <select value={prodSelecionado} onChange={e => {setProdSelecionado(e.target.value); setCorComprada("")}} className="flex-1 border border-border/80 rounded-lg px-3 h-10 text-sm bg-card focus:outline-none focus:border-primary">
-                    <option value="">Escolher Modelo...</option>
-                    {produtos.map(p => <option key={p.id} value={p.id}>{p.nome}</option>)}
-                  </select>
-                  
-                  <select value={corComprada} onChange={e => setCorComprada(e.target.value)} disabled={!prodSelecionado} className="w-full md:w-32 border border-border/80 rounded-lg px-3 h-10 text-sm bg-card focus:outline-none focus:border-primary disabled:opacity-50">
-                    <option value="">Cor...</option>
-                    {coresDisponiveisForm.map((cor: string) => <option key={cor} value={cor}>{cor}</option>)}
-                  </select>
+                <select value={prodSelecionado} onChange={e => handleChangeProduto(e.target.value)} className="w-full max-w-md border border-border/80 rounded-lg px-3 h-10 text-sm bg-card focus:outline-none focus:border-primary mb-4 font-bold">
+                  <option value="">Escolher Modelo...</option>
+                  {produtos.map(p => <option key={p.id} value={p.id}>{p.nome}</option>)}
+                </select>
 
-                  <div className="flex items-center gap-2 w-full md:w-auto">
-                    <span className="text-[10px] font-bold text-muted-foreground uppercase">Qtd:</span>
-                    <input type="number" min="1" value={qtdComprada} onChange={e => setQtdComprada(Number(e.target.value))} className="w-16 border border-border/80 rounded-lg px-2 h-10 text-center text-sm bg-card focus:outline-none focus:border-primary" />
+                {produtoSendoAdicionado && (
+                  <div className="space-y-5 animate-in fade-in zoom-in-95">
+                    {/* Botões de Cor */}
+                    <div>
+                      <span className="text-[10px] font-bold uppercase tracking-widest text-muted-foreground block mb-2">1. Escolha a Cor</span>
+                      <div className="flex gap-2 flex-wrap">
+                        {produtoSendoAdicionado.cores?.map((cor: string) => (
+                          <button 
+                            key={cor}
+                            onClick={() => setCorAtiva(cor)}
+                            className={`px-4 py-2 rounded-full text-xs font-bold transition-all border shadow-sm ${corAtiva === cor ? 'bg-primary text-primary-foreground border-primary' : 'bg-background text-foreground border-border/80 hover:border-primary/50'}`}
+                          >
+                            {cor}
+                          </button>
+                        ))}
+                      </div>
+                    </div>
+
+                    {/* Matriz de Tamanhos */}
+                    {corAtiva && (
+                      <div className="bg-card border border-border/50 rounded-xl overflow-hidden shadow-sm max-w-md">
+                        <div className="bg-secondary/20 px-4 py-2 border-b border-border/50 flex justify-between items-center">
+                          <span className="text-[10px] font-bold uppercase tracking-widest text-muted-foreground">Grade para <strong className="text-foreground">{corAtiva}</strong></span>
+                        </div>
+                        <div className="divide-y divide-border/50">
+                          {produtoSendoAdicionado.grade_tamanhos?.map((tam: string) => {
+                            const qtd = selecoesGrade[corAtiva]?.[tam] || 0;
+                            return (
+                              <div key={tam} className="flex justify-between items-center px-4 py-3 hover:bg-secondary/5">
+                                <span className="font-bold text-sm text-foreground w-12">{tam}</span>
+                                <div className="flex items-center border border-border/80 rounded-lg h-9 w-28 overflow-hidden bg-background">
+                                  <button onClick={() => alterarQtdGrade(tam, -1)} disabled={qtd === 0} className="flex-1 flex justify-center items-center hover:bg-secondary/50 disabled:opacity-30"><Minus size={14}/></button>
+                                  <span className="flex-1 text-center font-bold text-sm border-x border-border/50 bg-secondary/10">{qtd}</span>
+                                  <button onClick={() => alterarQtdGrade(tam, 1)} className="flex-1 flex justify-center items-center hover:bg-secondary/50"><Plus size={14}/></button>
+                                </div>
+                              </div>
+                            )
+                          })}
+                        </div>
+                      </div>
+                    )}
+
+                    <button 
+                      onClick={adicionarGradeAoLancamento}
+                      className="bg-foreground text-background font-bold uppercase tracking-widest text-[10px] px-6 h-10 rounded-lg shadow hover:bg-foreground/90 transition-all flex items-center gap-2"
+                    >
+                      <Plus size={14} /> Confirmar {getSubtotalModelo() > 0 ? getSubtotalModelo() : ''} Peças Deste Modelo
+                    </button>
                   </div>
-
-                  <button onClick={adicionarItemAoLancamento} className="w-full md:w-auto bg-foreground text-background font-bold uppercase tracking-widest text-[10px] px-4 h-10 rounded-lg shadow hover:bg-foreground/90 transition-all flex items-center justify-center gap-2 whitespace-nowrap">
-                    <Plus size={14} /> Add Peça
-                  </button>
-                </div>
+                )}
 
                 {/* LISTA DO MINI CARRINHO */}
                 {itensLancamento.length > 0 && (
-                  <div className="mt-5 space-y-2 border-t border-border/50 pt-4">
+                  <div className="mt-8 space-y-2 border-t border-border/50 pt-5">
+                    <h5 className="text-[10px] font-bold uppercase tracking-widest text-muted-foreground mb-3">Resumo da Nota ({itensLancamento.reduce((acc, i) => acc + i.quantidade, 0)} peças)</h5>
                     {itensLancamento.map(item => (
-                      <div key={item.idTemp} className="flex justify-between items-center bg-background border border-border/50 p-2.5 rounded-lg text-sm">
-                        <div>
-                          <span className="font-bold text-foreground mr-2">{item.quantidade}x</span>
-                          <span className="text-foreground">{item.nome}</span>
-                          <span className="text-[10px] text-muted-foreground ml-2 font-bold uppercase tracking-widest border border-border px-1.5 py-0.5 rounded">{item.cor}</span>
+                      <div key={item.idTemp} className="flex justify-between items-center bg-background border border-border/50 p-2.5 rounded-lg text-sm shadow-sm">
+                        <div className="flex items-center gap-2 flex-wrap">
+                          <span className="font-bold text-foreground bg-secondary/50 px-2 py-0.5 rounded text-[11px]">{item.quantidade}x</span>
+                          <span className="text-foreground font-medium">{item.nome}</span>
+                          <span className="text-[10px] text-muted-foreground font-bold uppercase tracking-widest border border-border px-1.5 py-0.5 rounded ml-2">{item.cor}</span>
+                          <span className="text-[10px] text-primary font-bold uppercase tracking-widest border border-primary/20 bg-primary/5 px-1.5 py-0.5 rounded">Tam: {item.tamanho}</span>
                         </div>
-                        <button onClick={() => removerItemDoLancamento(item.idTemp)} className="text-muted-foreground hover:text-destructive p-1"><Trash2 size={16}/></button>
+                        <button onClick={() => removerItemDoLancamento(item.idTemp)} className="text-muted-foreground hover:text-destructive p-1 transition-colors"><Trash2 size={16}/></button>
                       </div>
                     ))}
                   </div>
@@ -473,11 +541,11 @@ export default function PedidosECrmPage() {
 
             </div>
 
-            <div className="px-6 py-4 border-t border-border/50 bg-card flex justify-between items-center">
+            <div className="px-6 py-4 border-t border-border/50 bg-card flex justify-between items-center shrink-0">
               <span className="text-xs font-bold text-muted-foreground uppercase tracking-widest">
-                Total Peças: {itensLancamento.reduce((acc, item) => acc + item.quantidade, 0)}
+                Total da Nota: {itensLancamento.reduce((acc, item) => acc + item.quantidade, 0)}
               </span>
-              <button onClick={handleSalvarVenda} disabled={salvando} className="bg-primary text-primary-foreground font-bold uppercase tracking-widest text-xs px-6 py-3 rounded-lg shadow-md hover:bg-primary/90 transition-all flex items-center gap-2">
+              <button onClick={handleSalvarVenda} disabled={salvando} className="bg-primary text-primary-foreground font-bold uppercase tracking-widest text-xs px-8 py-3 rounded-xl shadow-md hover:bg-primary/90 transition-all flex items-center gap-2 hover:scale-[1.02]">
                 {salvando ? <Loader2 size={16} className="animate-spin" /> : "Salvar Nota Completa"}
               </button>
             </div>
