@@ -5,7 +5,7 @@ import { supabase } from "@/lib/supabase";
 import { Navbar } from "@/components/Navbar";
 import { useRouter } from "next/navigation";
 import { Loader2, Users, ShoppingBag, Filter, MessageCircle, Plus, MapPin, Calendar, Scissors, X, Edit, Trash2, BusFront } from "lucide-react";
-import { format } from "date-fns";
+import { format, differenceInDays } from "date-fns";
 import { ptBR } from "date-fns/locale";
 
 export default function PedidosECrmPage() {
