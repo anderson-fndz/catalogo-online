@@ -219,7 +219,7 @@ export default function DashboardBI() {
         d.setDate(d.getDate() - (6 - i));
         const dStr = d.toLocaleDateString("pt-BR", { day: '2-digit', month: 'short' }).replace(". de ", " ").replace(".", "");
         const existente = agrupamentoGrafico[dStr];
-        return { data: dStr, valor: existente ? existente.valor : 0 };
+        return { data: dStr, valor: existente ? existente.valor : 0, timestamp: d.getTime() };
       });
     }
 
