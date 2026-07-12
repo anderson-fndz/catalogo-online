@@ -2,7 +2,7 @@
 
 import { useState, useEffect } from "react";
 import { supabase } from "@/lib/supabase";
-import { Loader2, Plus, X, Trash2, Minus, Edit, DollarSign } from "lucide-react";
+import { Loader2, Plus, X, Trash2, Minus, Edit, DollarSign, Image as ImageIcon } from "lucide-react";
 
 interface ModalCrmProps {
   isOpen: boolean;
@@ -16,6 +16,7 @@ interface ModalCrmProps {
 export default function ModalCrm({ isOpen, onClose, onSuccess, clientesBase, produtosBase, grupoEdicao }: ModalCrmProps) {
   const [salvando, setSalvando] = useState(false);
   const [coresBanco, setCoresBanco] = useState<any[]>([]); 
+  const [tamanhoSendoEditado, setTamanhoSendoEditado] = useState<string | null>(null); // Controla qual tamanho exibe os botões +/-
   
   const [tipoCliente, setTipoCliente] = useState<"existente" | "novo">("existente");
   const [clienteSelecionado, setClienteSelecionado] = useState("");
@@ -25,6 +26,7 @@ export default function ModalCrm({ isOpen, onClose, onSuccess, clientesBase, pro
   const [novoNomePacote, setNovoNomePacote] = useState(""); 
   const [dataVendaManual, setDataVendaManual] = useState(new Date().toISOString().split('T')[0]);
 
+  const [filtroTecidoModal, setFiltroTecidoModal] = useState("");
   const [itensLancamento, setItensLancamento] = useState<any[]>([]);
   const [prodSelecionado, setProdSelecionado] = useState("");
   const [corAtiva, setCorAtiva] = useState("");
@@ -39,6 +41,8 @@ export default function ModalCrm({ isOpen, onClose, onSuccess, clientesBase, pro
 
     if (isOpen) {
       carregarCoresDoBanco();
+      setFiltroTecidoModal("");
+      setTamanhoSendoEditado(null);
 
       if (grupoEdicao) {
         setTipoCliente("existente");
@@ -49,6 +53,7 @@ export default function ModalCrm({ isOpen, onClose, onSuccess, clientesBase, pro
           produto_id: i.produto.id,
           nome: i.produto.nome,
           tecido: i.produto.tecido,
+          imagens: i.produto.imagens, 
           cor: i.cor,
           tamanho: i.tamanho,
           quantidade: i.quantidade,
@@ -65,14 +70,10 @@ export default function ModalCrm({ isOpen, onClose, onSuccess, clientesBase, pro
   if (!isOpen) return null;
 
   const encontrarHexCor = (nomeCor: string) => {
-    const corAchada = coresBanco.find(
-      c => c.nome?.toLowerCase().trim() === nomeCor.toLowerCase().trim()
-    );
+    const corAchada = coresBanco.find(c => c.nome?.toLowerCase().trim() === nomeCor.toLowerCase().trim());
     return corAchada?.hex || '#cbd5e1'; 
   };
 
-  // --- NOVA INTELIGÊNCIA DE CONTRASTE ---
-  // Calcula se o texto deve ser branco ou preto baseado na cor de fundo
   const getCorDoTexto = (hexColor: string) => {
     const hex = hexColor.replace('#', '');
     if (hex.length !== 6) return '#ffffff';
@@ -80,8 +81,11 @@ export default function ModalCrm({ isOpen, onClose, onSuccess, clientesBase, pro
     const g = parseInt(hex.substring(2, 4), 16);
     const b = parseInt(hex.substring(4, 6), 16);
     const yiq = ((r * 299) + (g * 587) + (b * 114)) / 1000;
-    return (yiq >= 128) ? '#111827' : '#ffffff'; // Retorna chumbo (escuro) ou branco
+    return (yiq >= 128) ? '#111827' : '#ffffff'; 
   };
+
+  const tecidosUnicos = Array.from(new Set(produtosBase.map(p => p.tecido).filter(Boolean)));
+  const produtosFiltrados = produtosBase.filter(p => !filtroTecidoModal || p.tecido === filtroTecidoModal);
 
   const handleChangeProduto = (id: string) => {
     setProdSelecionado(id); setCorAtiva(""); setSelecoesGrade({});
@@ -96,9 +100,14 @@ export default function ModalCrm({ isOpen, onClose, onSuccess, clientesBase, pro
     });
   };
 
+  const pecasSendoSelecionadas = Object.values(selecoesGrade).reduce((acc, tamanhos) => acc + Object.values(tamanhos).reduce((sum, qtd) => sum + qtd, 0), 0);
+
   const adicionarGradeAoLancamento = () => {
+    if (pecasSendoSelecionadas === 0) return alert("Selecione pelo menos uma peça na grade.");
+    
     const prodRef = produtosBase.find(p => p.id.toString() === prodSelecionado);
     const novosItens: any[] = [];
+    
     Object.keys(selecoesGrade).forEach(cor => {
       Object.keys(selecoesGrade[cor]).forEach(tam => {
         const qtd = selecoesGrade[cor][tam];
@@ -106,7 +115,8 @@ export default function ModalCrm({ isOpen, onClose, onSuccess, clientesBase, pro
           idTemp: Date.now() + Math.random(), 
           produto_id: prodRef.id, 
           nome: prodRef.nome, 
-          tecido: prodRef.tecido, 
+          tecido: prodRef.tecido,
+          imagens: prodRef.imagens, 
           cor: cor, 
           tamanho: tam, 
           quantidade: qtd, 
@@ -114,9 +124,18 @@ export default function ModalCrm({ isOpen, onClose, onSuccess, clientesBase, pro
         });
       });
     });
-    if (novosItens.length === 0) return alert("Selecione pelo menos uma peça na grade.");
-    setItensLancamento([...itensLancamento, ...novosItens]);
-    setProdSelecionado(""); setCorAtiva(""); setSelecoesGrade({}); setPrecoAplicado("");
+
+    setItensLancamento(prev => {
+      let copia = [...prev];
+      novosItens.forEach(novo => {
+        const index = copia.findIndex(i => i.produto_id === novo.produto_id && i.tamanho === novo.tamanho && i.cor === novo.cor);
+        if (index >= 0) copia[index].quantidade += novo.quantidade;
+        else copia.push(novo);
+      });
+      return copia;
+    });
+
+    setProdSelecionado(""); setCorAtiva(""); setSelecoesGrade({}); setPrecoAplicado(""); setFiltroTecidoModal("");
   };
 
   const alterarPrecoAgrupado = (produto_id: string, tamanho: string, novoPreco: number) => {
@@ -124,6 +143,20 @@ export default function ModalCrm({ isOpen, onClose, onSuccess, clientesBase, pro
       if (item.produto_id === produto_id && item.tamanho === tamanho) return { ...item, preco_unitario: novoPreco };
       return item;
     }));
+  };
+
+  // Altera a quantidade direto pelas ações de clique no painel expandido do resumo
+  const alterarQtdLancamento = (produto_id: string, tamanho: string, cor: string, delta: number) => {
+    setItensLancamento(prev => prev.map(item => {
+      if (item.produto_id === produto_id && item.tamanho === tamanho && item.cor === cor) {
+        return { ...item, quantity_fixed: true, quantidade: Math.max(0, item.quantidade + delta) };
+      }
+      return item;
+    }).filter(item => item.quantidade > 0));
+  };
+
+  const removerProdutoInteiro = (produto_id: string) => {
+    setItensLancamento(prev => prev.filter(item => item.produto_id !== produto_id));
   };
 
   const handleSalvarVenda = async () => {
@@ -165,14 +198,29 @@ export default function ModalCrm({ isOpen, onClose, onSuccess, clientesBase, pro
     }
   };
 
-  const itensAgrupadosModal = itensLancamento.reduce((acc, item) => {
-    const key = `${item.produto_id}-${item.tamanho}`;
-    if (!acc[key]) acc[key] = { ...item, coresMap: {}, total_pecas: 0 };
-    if (!acc[key].coresMap[item.cor]) acc[key].coresMap[item.cor] = 0;
-    acc[key].coresMap[item.cor] += item.quantidade;
-    acc[key].total_pecas += item.quantidade;
+  const agrupamentoMestre = itensLancamento.reduce((acc, item) => {
+    if (!acc[item.produto_id]) {
+      acc[item.produto_id] = {
+        produto_id: item.produto_id,
+        nome: item.nome,
+        imagens: item.imagens,
+        tamanhos: {} as Record<string, { preco_unitario: number, cores: Record<string, number>, total_tamanho: number }>,
+        total_pecas_produto: 0,
+        valor_total_produto: 0
+      };
+    }
+    if (!acc[item.produto_id].tamanhos[item.tamanho]) {
+      acc[item.produto_id].tamanhos[item.tamanho] = { preco_unitario: item.preco_unitario, cores: {}, total_tamanho: 0 };
+    }
+    if (!acc[item.produto_id].tamanhos[item.tamanho].cores[item.cor]) {
+      acc[item.produto_id].tamanhos[item.tamanho].cores[item.cor] = 0;
+    }
+    acc[item.produto_id].tamanhos[item.tamanho].cores[item.cor] += item.quantidade;
+    acc[item.produto_id].tamanhos[item.tamanho].total_tamanho += item.quantidade;
+    acc[item.produto_id].total_pecas_produto += item.quantidade;
+    acc[item.produto_id].valor_total_produto += (item.quantidade * item.preco_unitario);
     return acc;
-  }, {} as any);
+  }, {} as Record<string, any>);
 
   const produtoSendoAdicionado = produtosBase.find(p => p.id.toString() === prodSelecionado);
 
@@ -219,14 +267,22 @@ export default function ModalCrm({ isOpen, onClose, onSuccess, clientesBase, pro
           </div>
 
           <div className="bg-secondary/10 border border-border/60 rounded-xl p-5 shadow-inner">
+            <h4 className="text-xs font-bold uppercase tracking-widest text-foreground mb-4">Adicionar Peças à Nota</h4>
+            
             <div className="flex flex-col md:flex-row gap-4 mb-5">
-              <select value={prodSelecionado} onChange={e => handleChangeProduto(e.target.value)} className="flex-1 border border-border/80 rounded-lg px-3 h-11 text-sm bg-card focus:outline-none focus:border-primary font-bold shadow-sm">
-                <option value="">Escolher Modelo...</option>
-                {produtosBase.map(p => <option key={p.id} value={p.id}>{p.nome}</option>)}
+              <select value={filtroTecidoModal} onChange={e => {setFiltroTecidoModal(e.target.value); setProdSelecionado("")}} className="w-full md:w-48 border border-border/80 rounded-lg px-3 h-11 text-sm bg-card focus:outline-none focus:border-primary font-bold text-primary">
+                <option value="">Filtro: Todos</option>
+                {tecidosUnicos.map((tec: any) => <option key={tec} value={tec}>{tec}</option>)}
               </select>
-              <div className="w-full md:w-48 relative">
+
+              <select value={prodSelecionado} onChange={e => handleChangeProduto(e.target.value)} className="flex-1 border border-border/80 rounded-lg px-3 h-11 text-sm bg-card focus:outline-none focus:border-primary font-bold">
+                <option value="">Escolher Modelo...</option>
+                {produtosFiltrados.map(p => <option key={p.id} value={p.id}>{p.nome}</option>)}
+              </select>
+              
+              <div className="w-full md:w-40 relative">
                 <div className="absolute inset-y-0 left-0 pl-3 flex items-center pointer-events-none"><DollarSign size={14} className="text-muted-foreground"/></div>
-                <input type="number" step="0.01" value={precoAplicado} onChange={e => setPrecoAplicado(e.target.value === "" ? "" : Number(e.target.value))} className="w-full border border-border/80 rounded-lg pl-8 pr-3 h-11 text-sm bg-card font-bold focus:outline-none focus:border-primary shadow-sm" placeholder="Preço Cobrado"/>
+                <input type="number" step="0.01" value={precoAplicado} onChange={e => setPrecoAplicado(e.target.value === "" ? "" : Number(e.target.value))} className="w-full border border-border/80 rounded-lg pl-8 pr-3 h-11 text-sm bg-card font-bold focus:outline-none" placeholder="Preço"/>
               </div>
             </div>
 
@@ -267,62 +323,95 @@ export default function ModalCrm({ isOpen, onClose, onSuccess, clientesBase, pro
                     </div>
                   </div>
                 )}
-                <button onClick={adicionarGradeAoLancamento} className="bg-foreground text-background font-bold uppercase tracking-widest text-[10px] px-6 h-10 rounded-lg shadow transition-all flex items-center gap-2 hover:bg-foreground/90"><Plus size={14} /> Adicionar à Nota</button>
+                <div className="flex items-center gap-4">
+                  <button onClick={adicionarGradeAoLancamento} className="bg-foreground text-background font-bold uppercase tracking-widest text-[10px] px-6 h-10 rounded-lg shadow transition-all flex items-center gap-2"><Plus size={14} /> Adicionar à Nota</button>
+                  {pecasSendoSelecionadas > 0 && <span className="text-xs font-bold text-primary animate-pulse">+{pecasSendoSelecionadas} peças selecionadas</span>}
+                </div>
               </div>
             )}
 
-            {Object.keys(itensAgrupadosModal).length > 0 && (
-              <div className="mt-8 space-y-3 border-t border-border/50 pt-5">
-                {Object.values(itensAgrupadosModal).map((agrupado: any, idx: number) => (
-                  <div key={idx} className="flex flex-col sm:flex-row sm:justify-between sm:items-center bg-background border border-border/50 p-4 rounded-xl text-sm shadow-sm gap-4 group">
-                    <div>
-                      <div className="flex items-center gap-2 mb-2">
-                        <span className="font-bold text-base">{agrupado.nome}</span>
-                        <span className="text-[10px] uppercase tracking-widest border border-border px-1.5 py-0.5 rounded font-bold bg-secondary/30">TAM: {agrupado.tamanho}</span>
+            {/* RESUMO MESTRE REESTRUTURADO E SEGURO */}
+            {Object.keys(agrupamentoMestre).length > 0 && (
+              <div className="mt-8 space-y-4 border-t border-border/50 pt-6">
+                {Object.values(agrupamentoMestre).map((produto: any) => {
+                  // Lê de forma segura a coluna de array text[]
+                  const capaUrl = (produto.imagens && Array.isArray(produto.imagens)) ? produto.imagens[0] : null;
+                  
+                  return (
+                    <div key={produto.produto_id} className="bg-background border border-border/60 rounded-xl overflow-hidden shadow-sm">
+                      <div className="flex items-center gap-4 bg-secondary/20 p-3 border-b border-border/50">
+                        {capaUrl ? (
+                          <img src={capaUrl} alt={produto.nome} className="w-12 h-12 rounded object-cover border border-border/50" />
+                        ) : (
+                          <div className="w-12 h-12 bg-secondary/50 rounded flex items-center justify-center text-muted-foreground"><ImageIcon size={20}/></div>
+                        )}
+                        <div className="flex-1">
+                          <h4 className="font-bold text-base text-foreground line-clamp-1">{produto.nome}</h4>
+                          <div className="text-[10px] uppercase tracking-widest text-muted-foreground font-medium mt-0.5">
+                            {produto.total_pecas_produto} peças | R$ {produto.valor_total_produto.toFixed(2).replace('.', ',')}
+                          </div>
+                        </div>
+                        <button onClick={() => removerProdutoInteiro(produto.produto_id)} className="p-2 text-muted-foreground hover:bg-destructive/10 hover:text-destructive rounded-lg transition-colors mr-1"><Trash2 size={18}/></button>
                       </div>
-                      
-                      <div className="flex items-center gap-3 flex-wrap text-xs text-muted-foreground mt-2">
-                        <div className="flex items-center gap-1 bg-primary/10 px-2 py-1 rounded transition-colors focus-within:bg-primary/20">
-                          <span className="text-primary font-bold">R$</span>
-                          <input 
-                            type="number" 
-                            step="0.01" 
-                            value={agrupado.preco_unitario === 0 ? "0" : agrupado.preco_unitario || ""} 
-                            onChange={(e) => alterarPrecoAgrupado(agrupado.produto_id, agrupado.tamanho, Number(e.target.value))}
-                            className="w-16 bg-transparent text-primary font-bold focus:outline-none focus:ring-0 placeholder:text-primary/50 text-center"
-                            placeholder="0.00"
-                          />
-                          <span className="text-primary font-bold">un.</span>
-                        </div>
 
-                        {/* LISTA DE CORES COM AS NOVAS LABELS/BADGES */}
-                        <div className="border-l border-border pl-3 flex gap-1.5 flex-wrap">
-                          {Object.entries(agrupado.coresMap).map(([cor, qtd]: any) => {
-                            const bgHex = encontrarHexCor(cor);
-                            const textHex = getCorDoTexto(bgHex);
-                            return (
-                              <span 
-                                key={cor} 
-                                className="flex items-center font-bold px-2.5 py-1 rounded-md border border-black/10 shadow-sm animate-in fade-in text-[10px] tracking-wide"
-                                style={{ backgroundColor: bgHex, color: textHex }}
-                              >
-                                {cor} ({qtd}x)
-                              </span>
-                            )
-                          })}
-                        </div>
+                      <div className="divide-y divide-border/30">
+                        {Object.entries(produto.tamanhos).map(([tam, dadosTam]: any) => {
+                          const isEditandoEsseTamanho = tamanhoSendoEditado === `${produto.produto_id}-${tam}`;
+                          
+                          return (
+                            <div key={tam} className="p-4 flex flex-col md:flex-row gap-4 md:items-center justify-between">
+                              <div className="flex items-center gap-3 shrink-0">
+                                <span className="text-[10px] uppercase tracking-widest border border-border px-2 py-1 rounded font-bold bg-secondary/30 w-16 text-center">TAM: {tam}</span>
+                                <div className="flex items-center gap-1 bg-primary/10 px-2 py-1 rounded">
+                                  <span className="text-primary font-bold text-xs">R$</span>
+                                  <input 
+                                    type="number" 
+                                    step="0.01" 
+                                    value={dadosTam.preco_unitario === 0 ? "0" : dadosTam.preco_unitario || ""} 
+                                    onChange={(e) => alterarPrecoAgrupado(produto.produto_id, tam, Number(e.target.value))}
+                                    className="w-12 bg-transparent text-primary font-bold text-xs text-center focus:outline-none"
+                                  />
+                                </div>
+                                
+                                {/* Botão discreto para revelar os botões de +/- */}
+                                <button 
+                                  onClick={() => setTamanhoSendoEditado(isEditandoEsseTamanho ? null : `${produto.produto_id}-${tam}`)}
+                                  className={`text-[10px] uppercase tracking-widest font-extrabold px-2.5 py-1 rounded border transition-all ${isEditandoEsseTamanho ? 'bg-primary text-primary-foreground' : 'text-muted-foreground hover:bg-secondary'}`}
+                                >
+                                  {isEditandoEsseTamanho ? "Fechar" : "Ajustar Grade"}
+                                </button>
+                              </div>
+
+                              <div className="flex-1 flex flex-wrap gap-2 md:pl-4 md:border-l md:border-border/50 justify-end">
+                                {Object.entries(dadosTam.cores).map(([cor, qtd]: any) => {
+                                  const bgHex = encontrarHexCor(cor);
+                                  const textHex = getCorDoTexto(bgHex);
+                                  
+                                  return (
+                                    <div key={cor} className="flex items-center rounded-full border shadow-sm h-7 overflow-hidden transition-all text-[10px] font-bold tracking-wide" style={{ backgroundColor: bgHex, color: textHex, borderColor: '#00000015' }}>
+                                      <span className="px-3">{cor}</span>
+                                      
+                                      {/* Se o painel não estiver ativado, exibe a etiqueta de quantidade limpa */}
+                                      {!isEditandoEsseTamanho ? (
+                                        <span className="pr-3 font-extrabold opacity-80">({qtd}x)</span>
+                                      ) : (
+                                        <div className="flex items-center h-full border-l" style={{ borderColor: `${textHex}30`, backgroundColor: `${textHex}10` }}>
+                                          <button onClick={() => alterarQtdLancamento(produto.produto_id, tam, cor, -1)} className="px-2 h-full hover:bg-black/10">-</button>
+                                          <span className="font-extrabold w-4 text-center">{qtd}</span>
+                                          <button onClick={() => alterarQtdLancamento(produto.produto_id, tam, cor, 1)} className="px-2 h-full hover:bg-black/10">+</button>
+                                        </div>
+                                      )}
+                                    </div>
+                                  )
+                                })}
+                              </div>
+                            </div>
+                          );
+                        })}
                       </div>
                     </div>
-
-                    <div className="flex items-center gap-4 shrink-0">
-                      <div className="text-right">
-                        <div className="text-[10px] font-bold uppercase tracking-widest text-muted-foreground">Subtotal</div>
-                        <div className="font-extrabold text-foreground">R$ {(agrupado.total_pecas * (agrupado.preco_unitario || 0)).toFixed(2).replace('.',',')}</div>
-                      </div>
-                      <button onClick={() => setItensLancamento(itensLancamento.filter(i => !(i.produto_id === agrupado.produto_id && i.tamanho === agrupado.tamanho)))} className="text-muted-foreground hover:bg-destructive/10 hover:text-destructive p-2 rounded-lg border border-border/50 transition-colors"><Trash2 size={16}/></button>
-                    </div>
-                  </div>
-                ))}
+                  );
+                })}
               </div>
             )}
           </div>
