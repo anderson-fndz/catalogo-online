@@ -155,7 +155,7 @@ export default function ProdutoPage() {
     await registrarMetricaUnica("clique_whatsapp_catalogo");
 
     const mensagemStr = `Oi! Estou vendo o modelo *${produto.nome}* no catálogo e gostaria de saber mais detalhes sobre a disponibilidade e fechar um pedido de atacado. ✨`;
-    const numeroWhatsAppDaLoja = "5511999999999"; 
+    const numeroWhatsAppDaLoja = "5511961624287"; 
     window.open(`https://wa.me/${numeroWhatsAppDaLoja}?text=${encodeURIComponent(mensagemStr)}`, '_blank');
   };
 
