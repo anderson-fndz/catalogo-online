@@ -129,8 +129,7 @@ export default function ProdutoPage() {
 
     if (totalPecas === 0) {
       acaoMetrica = "clique_whatsapp_duvida";
-      mensagemStr = `Oi! Estou vendo o modelo *${produto.nome}* no site e gostaria de tirar algumas dúvidas sobre o atacado. ✨`;
-    } else {
+      const mensagemStr = `Olá! Tenho interesse no modelo *${produto.nome}*. Gostaria de tirar algumas dúvidas e ver as cores disponíveis no atacado. ✨`;    } else {
       acaoMetrica = "checkout_whatsapp_direto";
       mensagemStr = `Olá! Gostaria de fechar um pedido de atacado do modelo *${produto.nome}*.\n\n*Minha Grade Selecionada:*\n`;
       Object.keys(selecoes).forEach(cor => {
@@ -154,8 +153,7 @@ export default function ProdutoPage() {
   const handleAcaoWhatsappCatalogo = async () => {
     await registrarMetricaUnica("clique_whatsapp_catalogo");
 
-    const mensagemStr = `Oi! Estou vendo o modelo *${produto.nome}* no catálogo e gostaria de saber mais detalhes sobre a disponibilidade e fechar um pedido de atacado. ✨`;
-    const numeroWhatsAppDaLoja = "5511961624287"; 
+    const mensagemStr = `Olá! Tenho interesse no modelo *${produto.nome}*. Gostaria de tirar algumas dúvidas e ver as cores disponíveis no atacado. ✨`;    const numeroWhatsAppDaLoja = "5511961624287"; 
     window.open(`https://wa.me/${numeroWhatsAppDaLoja}?text=${encodeURIComponent(mensagemStr)}`, '_blank');
   };
 

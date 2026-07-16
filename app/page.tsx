@@ -155,7 +155,7 @@ function VitrineConteudo() {
         </div>
       </div>
 
-      <main className="max-w-7xl mx-auto pt-16 space-y-20 flex-1 w-full pb-20">
+      <main className="max-w-7xl mx-auto pt-10 space-y-15 flex-1 w-full pb-20">
         
         {/* BENEFÍCIOS */}
         <div className="bg-secondary/20 border-y border-border/50 py-8">
