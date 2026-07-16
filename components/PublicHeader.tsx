@@ -82,8 +82,7 @@ export function PublicHeader() {
 
   return (
     <>
-      <div className="bg-primary text-primary-foreground text-[10px] sm:text-xs font-bold uppercase tracking-widest py-2.5 text-center px-4 w-full shadow-sm">
-        Atacado somente para lojistas e revendedores
+      <div className="bg-[#82042e] text-white text-[10px] sm:text-xs font-bold uppercase tracking-widest text-center py-2.5 px-4">Atacado somente para lojistas e revendedores
       </div>
 
       <div className="hidden md:flex justify-between items-center py-2.5 px-4 sm:px-6 lg:px-8 border-b border-border/40 max-w-7xl mx-auto w-full text-sm text-muted-foreground">
